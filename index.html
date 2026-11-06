@@ -20,7 +20,7 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </head>
 <body>
 <div id="overlay"><div id="panel"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><p>WASD to move · Mouse to look · ESC to release the mouse</p><button id="start">ENTER OCEAN</button></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — surface / rise<br>CTRL — dive<br>E — climb onto driftwood<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
+<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — rise underwater / jump at surface<br>CTRL — dive<br>E — climb onto driftwood<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -84,7 +84,7 @@ document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
   if(e.code==="Space"&&!e.repeat&&player.inWater){
     const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-    if(player.swimPosition.y>=surface-.2&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+    if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
   }
   keys.add(e.code);
   if(e.code==="KeyE"&&player.inWater){
@@ -141,7 +141,7 @@ function updatePlayer(dt,t){
   }
 
   // Water movement has drag and neutral buoyancy. CTRL is a deliberate dive;
-  // SPACE is a one-time surface jump on key press, never continuous lift.
+  // SPACE rises while held underwater and gives a single jump at the surface.
   const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
   const diving=keys.has("ControlLeft")||keys.has("ControlRight");
   const lookDirection=new THREE.Vector3(
@@ -162,6 +162,9 @@ function updatePlayer(dt,t){
   player.velocity.z+=swimInput.z*swimAcceleration*dt;
 
   if(diving)player.velocity.y-=3.2*dt;
+  else if(underwaterNow&&keys.has("Space")){
+    player.velocity.y+=5.8*dt;
+  }
   else if(!underwaterNow){
     const targetY=surface+.18;
     player.velocity.y+=(targetY-player.swimPosition.y)*2.8*dt;
