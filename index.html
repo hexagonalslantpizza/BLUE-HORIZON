@@ -372,7 +372,7 @@ function updateWind(dt){
     if(wind.shiftTime>=wind.shiftDuration)wind.angle=wind.targetAngle;
   }
   windDirection.set(Math.sin(wind.angle),0,-Math.cos(wind.angle)).normalize();
-  const relativeAngle=wind.angle-player.yaw;
+  const relativeAngle=wind.angle+player.yaw;
   windArrow.style.transform=`rotate(${relativeAngle*180/Math.PI}deg)`;
   windStrength.textContent=wind.speed<4.8?"LIGHT BREEZE":wind.speed>5.8?"STRONG BREEZE":"STEADY BREEZE";
 }
