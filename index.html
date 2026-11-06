@@ -179,12 +179,12 @@ function buildPlank(){
   let tx=0,tz=0;
   if(Math.abs(faceX)>Math.abs(faceZ)){
     const sign=Math.sign(faceX)||1;
-    const edge=Math.max(...[...raftTiles].map(v=>Math.abs(Number(v.split(",")[0]))));
-    tx=sign*(edge+1);
+    const xs=[...raftTiles].map(v=>Number(v.split(",")[0]));
+    tx=sign>0?Math.max(...xs)+1:Math.min(...xs)-1;
   }else{
     const sign=Math.sign(faceZ)||-1;
-    const edge=Math.max(...[...raftTiles].map(v=>Math.abs(Number(v.split(",")[1]))));
-    tz=sign*(edge+1);
+    const zs=[...raftTiles].map(v=>Number(v.split(",")[1]));
+    tz=sign>0?Math.max(...zs)+1:Math.min(...zs)-1;
   }
   const key=tx+","+tz;
   if(raftTiles.has(key)){craftInfo.textContent="That section is already occupied.";return;}
