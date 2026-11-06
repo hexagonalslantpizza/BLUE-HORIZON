@@ -14,7 +14,8 @@ p{color:#c0d0ce;line-height:1.5;font-size:14px}
 button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
 #hud{position:fixed;left:16px;bottom:14px;z-index:2;color:#dce9e5;font-size:12px;line-height:1.5;text-shadow:0 2px 4px #000;pointer-events:none}
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
-#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}\n#underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
+#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
+#underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
 </style>
 </head>
 <body>
@@ -72,7 +73,7 @@ const player={
   inWater:false,
   diving:false
 };
-let pointerLocked=false,fallen=false;\nlet driftX=0,driftZ=0;
+let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
 const underwaterOverlay=document.getElementById("underwater");
 document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
@@ -80,8 +81,12 @@ document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointe
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
 document.addEventListener("keydown",e=>{
-  keys.add(e.code);
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
+  if(e.code==="Space"&&!e.repeat&&player.inWater){
+    const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+    if(player.swimPosition.y>=surface-.2&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+  }
+  keys.add(e.code);
   if(e.code==="KeyE"&&player.inWater){
     const dx=player.swimPosition.x-wood.position.x;
     const dz=player.swimPosition.z-wood.position.z;
@@ -101,7 +106,9 @@ function updateOcean(t){
   positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
 }
 function updateDriftwood(t){
-  wood.position.set(0,waveHeight(0,0,t)+.12,0);
+  const driftX=Math.sin(t*.11)*2.4+Math.sin(t*.047)*1.1;
+  const driftZ=Math.cos(t*.09)*1.9+Math.sin(t*.061)*.8;
+  wood.position.set(driftX,waveHeight(driftX,driftZ,t)+.12,driftZ);
   wood.quaternion.setFromUnitVectors(up,surfaceNormal(0,0,t));
   wood.rotateY(Math.sin(t*.22)*.025);
 }
@@ -170,8 +177,8 @@ function updatePlayer(dt,t){
   player.swimPosition.addScaledVector(player.velocity,dt);
 
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
-  if(!diving&&player.swimPosition.y>newSurface+.55){
-    player.swimPosition.y=newSurface+.55;
+  if(!diving&&player.swimPosition.y>newSurface+1.0){
+    player.swimPosition.y=newSurface+1.0;
     if(player.velocity.y>0)player.velocity.y=0;
   }
   if(!diving&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
