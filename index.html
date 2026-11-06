@@ -112,13 +112,14 @@ document.addEventListener("keydown",e=>{
     if(!player.inWater&&player.boardGrounded){
       player.boardJumpVelocity=4.7;
       player.boardGrounded=false;
-    }else if(player.inWater){
+    }else if(player.inWater&&!player.waterJumping){
       const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
       if(player.swimPosition.y>=surface-.2&&player.swimPosition.y<=surface+.9){
         player.velocity.y=7.2;
         player.waterJumping=true;
       }else{
-        player.velocity.y=2.2;
+        // A single upward swimming kick per key press, never continuous lift.
+        player.velocity.y=Math.max(player.velocity.y,2.2);
       }
     }
   }
@@ -228,9 +229,6 @@ function updatePlayer(dt,t){
   if(player.waterJumping){
     player.velocity.y-=9.8*dt;
   }else if(diving)player.velocity.y-=3.2*dt;
-  else if(underwaterNow&&keys.has("Space")){
-    player.velocity.y+=5.8*dt;
-  }
   else if(!underwaterNow){
     const targetY=surface+.18;
     player.velocity.y+=(targetY-player.swimPosition.y)*2.8*dt;
