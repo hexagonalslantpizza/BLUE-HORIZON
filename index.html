@@ -47,9 +47,25 @@ const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34
 const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
 const positions=oceanGeometry.attributes.position;
 const basePositions=positions.array.slice();
-function waveHeight(x,z,t){
-return Math.sin(x*.105+t*.85)*.19+Math.sin(z*.078-t*.62)*.14+Math.sin((x+z)*.045+t*.43)*.11+Math.sin((x*.7-z)*.16+t*1.15)*.045;
+const waveLayers=[
+  {dx:1,dz:.22,amplitude:.34,length:19,speed:1.05,steepness:.48},
+  {dx:.42,dz:1,amplitude:.22,length:11,speed:1.35,steepness:.38},
+  {dx:-.78,dz:.62,amplitude:.105,length:5.5,speed:1.8,steepness:.28},
+  {dx:.15,dz:-1,amplitude:.045,length:2.4,speed:2.5,steepness:.18}
+];
+function waveSample(x,z,t){
+  let height=0,offsetX=0,offsetZ=0;
+  for(const wave of waveLayers){
+    const length=Math.hypot(wave.dx,wave.dz),dx=wave.dx/length,dz=wave.dz/length;
+    const k=2*Math.PI/wave.length,phase=k*(dx*x+dz*z)-wave.speed*t;
+    const a=wave.amplitude;
+    height+=a*Math.sin(phase);
+    const horizontal=wave.steepness*a*Math.cos(phase);
+    offsetX+=dx*horizontal;offsetZ+=dz*horizontal;
+  }
+  return {height,x:offsetX,z:offsetZ};
 }
+function waveHeight(x,z,t){return waveSample(x,z,t).height;}
 function surfaceNormal(x,z,t){
 const e=.12;
 const dx=(waveHeight(x+e,z,t)-waveHeight(x-e,z,t))/(2*e);
@@ -71,7 +87,10 @@ const player={
   yaw:0,
   pitch:0,
   inWater:false,
-  diving:false
+  diving:false,
+  boardGrounded:true,
+  boardJumpVelocity:0,
+  fallingIntoWater:false
 };
 let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
@@ -82,9 +101,14 @@ document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.ya
 const keys=new Set();
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
-  if(e.code==="Space"&&!e.repeat&&player.inWater){
-    const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-    if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+  if(e.code==="Space"&&!e.repeat){
+    if(!player.inWater&&player.boardGrounded){
+      player.boardJumpVelocity=4.7;
+      player.boardGrounded=false;
+    }else if(player.inWater){
+      const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+      if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+    }
   }
   keys.add(e.code);
   if(e.code==="KeyE"&&player.inWater){
@@ -102,13 +126,19 @@ window.addEventListener("blur",()=>keys.clear());
 const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3();
 let elapsed=0;
 function updateOcean(t){
-  for(let i=0;i<positions.count;i++){const x=basePositions[i*3],z=basePositions[i*3+2];positions.array[i*3+1]=waveHeight(x,z,t);}
+  for(let i=0;i<positions.count;i++){
+    const x=basePositions[i*3],z=basePositions[i*3+2],sample=waveSample(x,z,t);
+    positions.array[i*3]=x+sample.x;
+    positions.array[i*3+1]=sample.height;
+    positions.array[i*3+2]=z+sample.z;
+  }
   positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
 }
 function updateDriftwood(t){
   const driftX=Math.sin(t*.11)*2.4+Math.sin(t*.047)*1.1;
   const driftZ=Math.cos(t*.09)*1.9+Math.sin(t*.061)*.8;
-  wood.position.set(driftX,waveHeight(driftX,driftZ,t)+.12,driftZ);
+  const boardWave=waveSample(driftX,driftZ,t);
+  wood.position.set(driftX+boardWave.x,boardWave.height+.12,driftZ+boardWave.z);
   wood.quaternion.setFromUnitVectors(up,surfaceNormal(driftX,driftZ,t));
   wood.rotateY(Math.sin(t*.22)*.025);
 }
@@ -126,13 +156,26 @@ function updatePlayer(dt,t){
     const localMove=move.clone().applyQuaternion(wood.quaternion.clone().invert());
     player.local.x+=localMove.x*2.25*dt;
     player.local.z+=localMove.z*2.25*dt;
+    if(player.boardGrounded){
+      player.local.x+=localMove.x*2.25*dt;
+      player.local.z+=localMove.z*2.25*dt;
+    }
+    if(!player.boardGrounded){
+      player.boardJumpVelocity-=9.8*dt;
+      player.local.y+=player.boardJumpVelocity*dt;
+      if(player.local.y<=0){
+        player.local.y=0;player.boardJumpVelocity=0;player.boardGrounded=true;
+      }
+    }
     const edgeX=Math.abs(player.local.x)>1.03;
     const edgeZ=Math.abs(player.local.z)>.91;
-    const boardPosition=new THREE.Vector3(player.local.x,0,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
+    const boardPosition=new THREE.Vector3(player.local.x,player.local.y,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
     if(edgeX||edgeZ){
-      player.inWater=true;fallen=true;
+      const boardVelocity=new THREE.Vector3(move.x*1.1,player.boardJumpVelocity,move.z*1.1);
+      player.inWater=true;fallen=true;player.fallingIntoWater=true;
       player.swimPosition.set(boardPosition.x,boardPosition.y+player.height,boardPosition.z);
-      player.velocity.set(move.x*1.1,-1.25,move.z*1.1);
+      player.velocity.copy(boardVelocity);
+      player.local.set(0,0,0);player.boardGrounded=true;player.boardJumpVelocity=0;
     }else{
       const cameraPosition=boardPosition.add(new THREE.Vector3(0,player.height,0));
       camera.position.copy(cameraPosition);
@@ -158,6 +201,19 @@ function updatePlayer(dt,t){
   if(swimInput.lengthSq()>0)swimInput.normalize();
 
   const underwaterNow=player.swimPosition.y<surface-.12;
+  if(player.fallingIntoWater){
+    player.velocity.y-=9.8*dt;
+    player.swimPosition.addScaledVector(player.velocity,dt);
+    const landingSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
+    if(player.swimPosition.y<=landingSurface+.18){
+      player.swimPosition.y=landingSurface+.18;
+      player.velocity.y=0;player.fallingIntoWater=false;
+    }else{
+      camera.position.copy(player.swimPosition);
+      camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+      return;
+    }
+  }
   const swimAcceleration=underwaterNow?3.8:3.0;
   player.velocity.x+=swimInput.x*swimAcceleration*dt;
   player.velocity.z+=swimInput.z*swimAcceleration*dt;
