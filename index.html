@@ -18,14 +18,44 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </style>
 </head>
 <body>
-<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump onto driftwood or rise while underwater</p><p><b>CTRL</b> — Dive underwater</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
+<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
 <div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="underwater" aria-hidden="true"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x78929a);
-scene.fog=new THREE.Fog(0x78929a,35,190);
+
+scene.fog=new THREE.Fog(0x9aafb3,55,245);
+const skyGeometry=new THREE.SphereGeometry(480,32,20);
+const skyMaterial=new THREE.ShaderMaterial({
+  side:THREE.BackSide,
+  depthWrite:false,
+  vertexShader:`varying vec3 vDirection;
+    void main(){
+      vDirection=normalize(position);
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+    }`,
+  fragmentShader:`varying vec3 vDirection;
+    void main(){
+      vec3 dir=normalize(vDirection);
+      float h=max(dir.y,0.0);
+      vec3 horizon=vec3(0.68,0.76,0.76);
+      vec3 zenith=vec3(0.12,0.27,0.36);
+      vec3 sky=mix(horizon,zenith,pow(h,0.62));
+      vec3 sunDir=normalize(vec3(-0.52,0.48,0.70));
+      float sunDot=max(dot(dir,sunDir),0.0);
+      float glow=pow(sunDot,10.0)*0.20+pow(sunDot,48.0)*0.0;
+      float disc=smoothstep(0.9990,0.9997,sunDot);
+      sky+=vec3(1.0,0.76,0.49)*(glow+disc*0.75);
+      float haze=exp(-pow(dir.y*18.0,2.0))*0.16;
+      sky=mix(sky,vec3(0.78,0.79,0.72),haze);
+      gl_FragColor=vec4(sky,1.0);
+    }`
+});
+const skyDome=new THREE.Mesh(skyGeometry,skyMaterial);
+skyDome.frustumCulled=false;
+scene.add(skyDome);
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);
 camera.rotation.order="YXZ";
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
