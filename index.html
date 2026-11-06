@@ -15,11 +15,26 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
 #status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
 #underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
+#survivalUI{position:fixed;left:14px;bottom:14px;z-index:3;background:#07141bdc;border:1px solid #bedcdc44;border-radius:7px;padding:12px 14px;min-width:190px;font-size:12px;backdrop-filter:blur(5px)}
+#survivalUI strong{letter-spacing:.12em;font-size:11px;color:#d9e7df}
+#inventoryRows{display:flex;gap:12px;margin-top:8px;color:#c7d8d2}
+#inventoryRows span{white-space:nowrap}
+#craftPanel{position:fixed;right:14px;bottom:14px;z-index:4;width:230px;background:#07141bf0;border:1px solid #bedcdc55;border-radius:7px;padding:13px;display:none}
+#craftPanel h2{font-size:13px;letter-spacing:.14em;margin:0 0 7px}
+#craftPanel p{font-size:11px;margin:5px 0;color:#c0d0ce}
+#craftPanel button{display:block;width:100%;margin:7px 0 0;padding:8px 10px;font-size:11px}
+#craftPanel .adjustRow{display:flex;gap:6px}
+#craftPanel .adjustRow button{flex:1}
+#pickupHint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:3;background:#07141be8;padding:9px 15px;border:1px solid #bedcdc55;border-radius:4px;font-size:12px;display:none}
+
 </style>
 </head>
 <body>
-<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
+<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect floating supplies</p><p><b>B</b> — Open raft workshop</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
 <div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="underwater" aria-hidden="true"></div>
+<div id="survivalUI"><strong>INVENTORY</strong><div id="inventoryRows"><span>Wood: <b id="woodCount">0</b></span><span>Rope: <b id="ropeCount">0</b></span><span>Cloth: <b id="clothCount">0</b></span></div><p style="margin:8px 0 0;font-size:10px">Press B to craft and build</p></div>
+<div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Gather floating supplies to begin building.</p><button id="buildPlank">BUILD WOODEN FLOOR · 2 WOOD</button><button id="buildSail">CRAFT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><div id="sailControls" style="display:none"><p>SAIL ADJUSTMENTS</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div></div><button id="closeCraft">CLOSE · B</button></div>
+<div id="pickupHint"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -111,7 +126,102 @@ plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
 const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1});
 for(let i=0;i<5;i++){const groove=new THREE.Mesh(new THREE.BoxGeometry(1.55,.012,.018),grainMaterial);groove.position.set(0,.116,-.58+i*.28);wood.add(groove);}
 const knot=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.012,12),new THREE.MeshStandardMaterial({color:0x3d3026,roughness:1}));
+
 knot.position.set(-.42,.12,.18);wood.add(knot);
+const inventory={wood:0,rope:0,cloth:0};
+const inventoryNodes={wood:document.getElementById("woodCount"),rope:document.getElementById("ropeCount"),cloth:document.getElementById("clothCount")};
+function refreshInventory(){for(const type of Object.keys(inventory))inventoryNodes[type].textContent=inventory[type];}
+const pickupItems=[];
+const pickupMaterials={
+  wood:new THREE.MeshStandardMaterial({color:0x98734b,roughness:.95}),
+  rope:new THREE.MeshStandardMaterial({color:0xb69a69,roughness:1}),
+  cloth:new THREE.MeshStandardMaterial({color:0xc5c0a5,roughness:.9,side:THREE.DoubleSide})
+};
+function createPickup(type,x,z,index){
+  const group=new THREE.Group();
+  if(type==="wood"){
+    const piece=new THREE.Mesh(new THREE.BoxGeometry(.95,.12,.2),pickupMaterials.wood);
+    piece.rotation.y=index*.73;group.add(piece);
+    const end=new THREE.Mesh(new THREE.BoxGeometry(.13,.14,.22),new THREE.MeshStandardMaterial({color:0x60462f}));
+    end.position.x=.42;piece.add(end);
+  }else if(type==="rope"){
+    const coil=new THREE.Mesh(new THREE.TorusGeometry(.28,.055,8,24),pickupMaterials.rope);
+    coil.rotation.x=Math.PI/2;group.add(coil);
+    const coil2=coil.clone();coil2.position.y=.035;coil2.scale.set(.78,.78,.78);group.add(coil2);
+  }else{
+    const cloth=new THREE.Mesh(new THREE.PlaneGeometry(.72,.58),pickupMaterials.cloth);
+    cloth.rotation.x=-Math.PI/2;cloth.rotation.z=index*.9;cloth.position.y=.025;group.add(cloth);
+    const fold=new THREE.Mesh(new THREE.BoxGeometry(.65,.025,.06),new THREE.MeshStandardMaterial({color:0x888d7e,roughness:1}));
+    fold.position.set(0,.04,.08);fold.rotation.y=index*.9;group.add(fold);
+  }
+  scene.add(group);
+  pickupItems.push({type,group,x,z,phase:index*1.7,active:true});
+}
+[
+  ["wood",-4.2,-2.5],["wood",4.5,2.1],["wood",-2.2,5.3],["wood",6.1,-3.8],
+  ["rope",-6.2,1.1],["rope",2.4,-6.0],["rope",7.1,4.6],
+  ["cloth",1.0,7.2],["cloth",-7.2,-3.7],["cloth",5.6,-7.0]
+].forEach((item,index)=>createPickup(item[0],item[1],item[2],index));
+const pickupHint=document.getElementById("pickupHint");
+const craftPanel=document.getElementById("craftPanel");
+const craftInfo=document.getElementById("craftInfo");
+let nearestPickup=null;
+let raftHalfX=.95,raftHalfZ=.825;
+const raftTiles=new Set(["0,0"]);
+function updateRaftBounds(){
+  let maxX=0,maxZ=0;
+  for(const tile of raftTiles){const [x,z]=tile.split(",").map(Number);maxX=Math.max(maxX,Math.abs(x));maxZ=Math.max(maxZ,Math.abs(z));}
+  raftHalfX=.95+maxX*1.9;raftHalfZ=.825+maxZ*1.65;
+}
+function buildPlank(){
+  if(inventory.wood<2){craftInfo.textContent="Not enough wood. Collect floating timber.";return;}
+  const faceX=-Math.sin(player.yaw),faceZ=-Math.cos(player.yaw);
+  let tx=0,tz=0;
+  if(Math.abs(faceX)>Math.abs(faceZ)){
+    const sign=Math.sign(faceX)||1;
+    const edge=Math.max(...[...raftTiles].map(v=>Math.abs(Number(v.split(",")[0]))));
+    tx=sign*(edge+1);
+  }else{
+    const sign=Math.sign(faceZ)||-1;
+    const edge=Math.max(...[...raftTiles].map(v=>Math.abs(Number(v.split(",")[1]))));
+    tz=sign*(edge+1);
+  }
+  const key=tx+","+tz;
+  if(raftTiles.has(key)){craftInfo.textContent="That section is already occupied.";return;}
+  inventory.wood-=2;refreshInventory();
+  const section=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x806346,roughness:.96}));
+  section.position.set(tx*1.9,0,tz*1.65);section.castShadow=true;section.receiveShadow=true;wood.add(section);
+  for(let i=0;i<4;i++){const line=new THREE.Mesh(new THREE.BoxGeometry(1.58,.012,.018),grainMaterial);line.position.set(tx*1.9,.116,tz*1.65-.48+i*.31);wood.add(line);}
+  raftTiles.add(key);updateRaftBounds();
+  craftInfo.textContent="Floor section added to your raft.";
+}
+let sailRig=null,sailAngle=0,sailHeight=0;
+function craftSail(){
+  if(sailRig){craftInfo.textContent="Your raft already has a sail.";return;}
+  if(inventory.wood<4||inventory.rope<2||inventory.cloth<2){craftInfo.textContent="You need 4 wood, 2 rope, and 2 cloth.";return;}
+  inventory.wood-=4;inventory.rope-=2;inventory.cloth-=2;refreshInventory();
+  sailRig=new THREE.Group();sailRig.position.set(0,.12,0);wood.add(sailRig);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,2.5,8),new THREE.MeshStandardMaterial({color:0x684c32,roughness:.9}));
+  mast.position.y=1.25;sailRig.add(mast);
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1.85,7),new THREE.MeshStandardMaterial({color:0x725438,roughness:.9}));
+  boom.rotation.z=Math.PI/2;boom.position.set(0,1.05,0);sailRig.add(boom);
+  const sailMaterial=new THREE.MeshStandardMaterial({color:0xc6bea0,roughness:.95,side:THREE.DoubleSide});
+  const sail=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.55,8,6),sailMaterial);
+  sail.position.set(0,1.83,.035);sailRig.add(sail);
+  const seamMaterial=new THREE.MeshStandardMaterial({color:0x958e76,roughness:1});
+  for(let i=0;i<5;i++){const seam=new THREE.Mesh(new THREE.BoxGeometry(.012,1.45,.012),seamMaterial);seam.position.set(-.65+i*.325,1.83,.055);sailRig.add(seam);}
+  sailRig.userData.mast=mast;sailRig.userData.sail=sail;
+  document.getElementById("sailControls").style.display="block";
+  craftInfo.textContent="Sail built! Adjust its angle and height below.";
+}
+document.getElementById("buildPlank").addEventListener("click",buildPlank);
+document.getElementById("buildSail").addEventListener("click",craftSail);
+document.getElementById("closeCraft").addEventListener("click",()=>craftPanel.style.display="none");
+document.getElementById("sailLeft").addEventListener("click",()=>{if(sailRig){sailAngle-=.12;sailRig.rotation.y=sailAngle;}});
+document.getElementById("sailRight").addEventListener("click",()=>{if(sailRig){sailAngle+=.12;sailRig.rotation.y=sailAngle;}});
+document.getElementById("sailDown").addEventListener("click",()=>{if(sailRig){sailHeight=Math.max(-.35,sailHeight-.1);sailRig.position.y=.12+sailHeight;}});
+document.getElementById("sailUp").addEventListener("click",()=>{if(sailRig){sailHeight=Math.min(.8,sailHeight+.1);sailRig.position.y=.12+sailHeight;}});
+
 const player={
   local:new THREE.Vector3(),
   velocity:new THREE.Vector3(),
@@ -138,6 +248,11 @@ document.getElementById("showControls").addEventListener("click",()=>{mainMenu.s
 document.getElementById("backToMenu").addEventListener("click",()=>{controlsPanel.style.display="none";mainMenu.style.display="block";});
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
+  if(e.code==="KeyB"&&!e.repeat&&pointerLocked){craftPanel.style.display=craftPanel.style.display==="block"?"none":"block";}
+  if(e.code==="KeyE"&&!e.repeat&&pointerLocked&&nearestPickup&&nearestPickup.active){
+    inventory[nearestPickup.type]++;refreshInventory();nearestPickup.active=false;nearestPickup.group.visible=false;
+    pickupHint.style.display="none";nearestPickup=null;
+  }
   if(e.code==="Space"&&!e.repeat){
     if(!player.inWater&&player.boardGrounded){
       player.boardJumpVelocity=4.7;
@@ -276,7 +391,7 @@ function updatePlayer(dt,t){
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
   const boardLocal=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
   const boardTop=.11;
-  const insideBoardTop=Math.abs(boardLocal.x)<.77&&Math.abs(boardLocal.z)<.64;
+  const insideBoardTop=Math.abs(boardLocal.x)<raftHalfX-.18&&Math.abs(boardLocal.z)<raftHalfZ-.18;
   if(player.waterJumping&&player.velocity.y<=0&&previousBoardLocalY>boardTop+player.height&&boardLocal.y<=boardTop+player.height&&insideBoardTop){
     player.inWater=false;player.waterJumping=false;player.fallingIntoWater=false;player.velocity.set(0,0,0);
     player.local.set(boardLocal.x,0,boardLocal.z);player.boardGrounded=true;player.pitch=0;
@@ -327,7 +442,23 @@ function updatePlayer(dt,t){
   camera.position.copy(player.swimPosition);
   camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);renderer.render(scene,camera);}
+function updatePickups(t,dt){
+  nearestPickup=null;let nearestDistance=3.1;
+  for(const item of pickupItems){
+    if(!item.active)continue;
+    const sample=waveSample(item.x,item.z,t);
+    item.group.position.set(item.x+sample.x,sample.height+.16+Math.sin(t*1.8+item.phase)*.055,item.z+sample.z);
+    item.group.rotation.y+=dt*.12;
+    const playerPosition=player.inWater?player.swimPosition:wood.localToWorld(new THREE.Vector3(player.local.x,player.local.y+player.height,player.local.z));
+    const distance=playerPosition.distanceTo(item.group.position);
+    if(distance<nearestDistance){nearestDistance=distance;nearestPickup=item;}
+  }
+  if(nearestPickup){
+    pickupHint.textContent="E  ·  COLLECT "+nearestPickup.type.toUpperCase();
+    pickupHint.style.display="block";
+  }else pickupHint.style.display="none";
+}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);renderer.render(scene,camera);}
 animate();
 window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script>
