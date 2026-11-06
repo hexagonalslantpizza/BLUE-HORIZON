@@ -41,8 +41,8 @@ import * as THREE from "three";
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x78929a);
 
-scene.fog=new THREE.Fog(0x9aafb3,55,245);
-const skyGeometry=new THREE.SphereGeometry(480,32,20);
+scene.fog=new THREE.Fog(0x9aafb3,1800,9500);
+const skyGeometry=new THREE.SphereGeometry(60000,32,20);
 const skyMaterial=new THREE.ShaderMaterial({
   side:THREE.BackSide,
   depthWrite:false,
@@ -71,7 +71,7 @@ const skyMaterial=new THREE.ShaderMaterial({
 const skyDome=new THREE.Mesh(skyGeometry,skyMaterial);
 skyDome.frustumCulled=false;
 scene.add(skyDome);
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,20000);
 camera.rotation.order="YXZ";
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.45));
@@ -84,17 +84,18 @@ document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xc5d9d8,0x263b3d,1.15));
 const sun=new THREE.DirectionalLight(0xffe4bd,1.6);
 sun.position.set(-35,55,20);sun.castShadow=false;scene.add(sun);
-const oceanGeometry=new THREE.PlaneGeometry(420,420,140,140);
+const WORLD_SIZE=100000;
+const WORLD_HALF=WORLD_SIZE/2;
+const oceanGeometry=new THREE.PlaneGeometry(WORLD_SIZE,WORLD_SIZE,200,200);
 oceanGeometry.rotateX(-Math.PI/2);
 const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05,side:THREE.DoubleSide});
 const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
 const positions=oceanGeometry.attributes.position;
 const basePositions=positions.array.slice();
 const waveLayers=[
-  {dx:1,dz:.22,amplitude:.34,length:19,speed:1.05,steepness:.48},
-  {dx:.42,dz:1,amplitude:.22,length:11,speed:1.35,steepness:.38},
-  {dx:-.78,dz:.62,amplitude:.105,length:5.5,speed:1.8,steepness:.28},
-  {dx:.15,dz:-1,amplitude:.045,length:2.4,speed:2.5,steepness:.18}
+  {dx:1,dz:.22,amplitude:5.8,length:4200,speed:.34,steepness:.42},
+  {dx:.42,dz:1,amplitude:3.4,length:2550,speed:.46,steepness:.34},
+  {dx:-.78,dz:.62,amplitude:1.7,length:1550,speed:.61,steepness:.24}
 ].map(wave=>{
   const directionLength=Math.hypot(wave.dx,wave.dz);
   return {...wave,dx:wave.dx/directionLength,dz:wave.dz/directionLength,k:2*Math.PI/wave.length};
@@ -115,7 +116,7 @@ function waveSample(x,z,t){
 }
 function waveHeight(x,z,t){return waveSample(x,z,t).height;}
 function surfaceNormal(x,z,t){
-const e=.12;
+const e=50;
 const dx=(waveHeight(x+e,z,t)-waveHeight(x-e,z,t))/(2*e);
 const dz=(waveHeight(x,z+e,t)-waveHeight(x,z-e,t))/(2*e);
 return new THREE.Vector3(-dx,1,-dz).normalize();
@@ -129,75 +130,131 @@ const windVelocity=new THREE.Vector3();
 let hullHeading=0;
 const windArrow=document.getElementById("windArrow"),windStrength=document.getElementById("windStrength"),shipDot=document.getElementById("shipDot");
 const islandData=[];
-function islandEdge(angle,seed){return 1+Math.sin(angle*3+seed)*.055+Math.sin(angle*5-seed*1.7)*.035+Math.cos(angle*2+seed*.6)*.045;}
+function islandEdge(angle,seed){
+  return 1+Math.sin(angle*2.7+seed)*.105+Math.sin(angle*5.1-seed*1.7)*.055+Math.cos(angle*8.3+seed*.6)*.025+Math.sin(angle*1.3+seed*2)*.045;
+}
 function islandSurfaceAt(island,x,z){
   const dx=x-island.x,dz=z-island.z,angle=Math.atan2(dz,dx),distance=Math.hypot(dx,dz);
   const normalized=distance/(island.radius*islandEdge(angle,island.seed));
   if(normalized>=1)return null;
-  return -.16+Math.pow(Math.max(0,1-normalized),1.35)*island.peak;
+  const edgeFade=THREE.MathUtils.smoothstep(1-normalized,0,.18);
+  const hills=island.hills;
+  let height=5;
+  for(const hill of hills){
+    const hx=dx-hill.x*island.radius,hz=dz-hill.z*island.radius;
+    const spread=hill.spread*island.radius;
+    height+=hill.height*Math.exp(-(hx*hx+hz*hz)/(2*spread*spread));
+  }
+  const broadNoise=(Math.sin(dx*.0017+island.seed)*Math.cos(dz*.0013-island.seed*.7)+Math.sin((dx+dz)*.00083+island.seed*2))*.035*island.peak;
+  const ridgeNoise=Math.abs(Math.sin(dx*.0021+Math.sin(dz*.0011)*1.8+island.seed))*island.peak*.035;
+  return Math.max(0,height*edgeFade+broadNoise*edgeFade+ridgeNoise*edgeFade);
 }
 function createIsland(x,z,radius,peak,seed,large){
-  const island={x,z,radius,peak,seed},segments=72,rings=15,vertices=[],colors=[],indices=[];
-  const sand=new THREE.Color(0xb5a77d),grass=new THREE.Color(0x65764b),rock=new THREE.Color(0x66675b);
-  vertices.push(x,-.16+peak,z);colors.push(rock.r,rock.g,rock.b);
-  for(let ring=1;ring<=rings;ring++){
+  const hills=[
+    {x:-.18,z:-.12,spread:.34,height:peak*.72},
+    {x:.24,z:.13,spread:.27,height:peak*.58},
+    {x:.02,z:.36,spread:.23,height:peak*.48},
+    {x:-.43,z:.31,spread:.2,height:peak*.34},
+    {x:.43,z:-.3,spread:.19,height:peak*.31}
+  ];
+  const island={x,z,radius,peak,seed,hills};
+  const segments=128,rings=34,vertices=[],colors=[],indices=[];
+  const sand=new THREE.Color(0xc1b28a),grass=new THREE.Color(0x657b50),deepGrass=new THREE.Color(0x465e40),rock=new THREE.Color(0x77776d);
+  for(let ring=0;ring<=rings;ring++){
     const t=ring/rings;
     for(let i=0;i<segments;i++){
-      const angle=i/segments*Math.PI*2,distance=radius*islandEdge(angle,seed)*t;
+      const angle=i/segments*Math.PI*2;
+      const distance=radius*t*islandEdge(angle,seed);
       const px=x+Math.cos(angle)*distance,pz=z+Math.sin(angle)*distance;
-      const py=-.16+Math.pow(Math.max(0,1-t),1.35)*peak;
+      const py=ring===rings?0:islandSurfaceAt(island,px,pz);
       vertices.push(px,py,pz);
-      const color=t>.84?sand:(py>peak*.48?rock:grass);
-      colors.push(color.r,color.g,color.b);
+      const color=py<13?sand:py>peak*.55?rock:py>peak*.25?deepGrass:grass;
+      const variation=1+Math.sin(px*.0011+seed)*.035+Math.cos(pz*.0014-seed)*.025;
+      colors.push(color.r*variation,color.g*variation,color.b*variation);
     }
   }
-  for(let i=0;i<segments;i++)indices.push(0,1+i,1+(i+1)%segments);
-  for(let ring=0;ring<rings-1;ring++){
-    const start=1+ring*segments,next=start+segments;
+  for(let ring=0;ring<rings;ring++){
+    const start=ring*segments,next=start+segments;
     for(let i=0;i<segments;i++){
-      const a=start+i,b=start+(i+1)%segments,c=next+i,d=next+(i+1)%segments;
-      indices.push(a,c,b,b,c,d);
+      const a=start+i,b=start+(i+1)%segments,d=next+i,e=next+(i+1)%segments;
+      indices.push(a,d,b,b,d,e);
     }
   }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
   geometry.setAttribute("color",new THREE.Float32BufferAttribute(colors,3));
   geometry.setIndex(indices);geometry.computeVertexNormals();
-  const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:true,side:THREE.DoubleSide}));
-  terrain.position.y=.04;scene.add(terrain);
-  const treeCount=large?12:4;
+  const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:false,side:THREE.DoubleSide}));
+  terrain.receiveShadow=true;scene.add(terrain);
+  const treeCount=large?58:14;
+  const trunkMaterial=new THREE.MeshStandardMaterial({color:0x594634,roughness:1});
+  const leafMaterials=[
+    new THREE.MeshStandardMaterial({color:0x3f6041,roughness:1}),
+    new THREE.MeshStandardMaterial({color:0x536f48,roughness:1}),
+    new THREE.MeshStandardMaterial({color:0x718052,roughness:1})
+  ];
   for(let i=0;i<treeCount;i++){
-    const angle=i/treeCount*Math.PI*2+seed,t=.28+((i*37+seed*13)%53)/100;
-    const distance=radius*t*islandEdge(angle,seed),tx=x+Math.cos(angle)*distance,tz=z+Math.sin(angle)*distance;
-    const ground=islandSurfaceAt(island,tx,tz);if(ground===null)continue;
-    const tree=new THREE.Group();tree.position.set(tx,ground+.05,tz);
-    const trunkHeight=(large?2.6:1.8)+((i*17)%7)*.12;
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.13,.22,trunkHeight,7),new THREE.MeshStandardMaterial({color:0x65503a,roughness:1}));
-    trunk.position.y=trunkHeight/2;tree.add(trunk);
-    const crown=new THREE.Mesh(new THREE.ConeGeometry(large?1.35:.9,large?2.5:1.7,7),new THREE.MeshStandardMaterial({color:i%3===0?0x536b45:0x718052,roughness:1}));
-    crown.position.y=trunkHeight+.65;tree.add(crown);scene.add(tree);
+    const angle=i*2.399+seed*3.1;
+    const radial=.18+((i*47+Math.floor(seed*100))%67)/100;
+    const distance=radius*radial*islandEdge(angle,seed);
+    const tx=x+Math.cos(angle)*distance,tz=z+Math.sin(angle)*distance;
+    const ground=islandSurfaceAt(island,tx,tz);
+    if(ground===null||ground>peak*.67)continue;
+    const tree=new THREE.Group();tree.position.set(tx,ground,tz);
+    const height=7+((i*19+Math.floor(seed*17))%13);
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.35,.65,height,7),trunkMaterial);
+    trunk.position.y=height/2;tree.add(trunk);
+    const crownMaterial=leafMaterials[i%leafMaterials.length];
+    const crown=new THREE.Group();crown.position.y=height*.82;
+    const crownSize=4.2+(i%4)*.65;
+    for(let j=0;j<5;j++){
+      const blob=new THREE.Mesh(new THREE.IcosahedronGeometry(crownSize*(j===0?1:.65),1),crownMaterial);
+      const a=j*2.4;
+      blob.position.set(Math.cos(a)*crownSize*.42,(j===0?1.2:((j%2)*1.4)),Math.sin(a)*crownSize*.42);
+      blob.scale.set(1,.75+((i+j)%3)*.12,1);
+      crown.add(blob);
+    }
+    tree.add(crown);scene.add(tree);
   }
-  const rockCount=large?10:4;
+  const rockCount=large?42:12;
   for(let i=0;i<rockCount;i++){
-    const angle=i/rockCount*Math.PI*2+seed*.7,distance=radius*(.82+((i*19)%13)/100)*islandEdge(angle,seed);
+    const angle=i*2.17+seed,distance=radius*(.72+((i*23)%21)/100)*islandEdge(angle,seed);
     const rx=x+Math.cos(angle)*distance,rz=z+Math.sin(angle)*distance,ground=islandSurfaceAt(island,rx,rz);
     if(ground===null)continue;
-    const stone=new THREE.Mesh(new THREE.DodecahedronGeometry(.45+((i*7)%5)*.11,0),new THREE.MeshStandardMaterial({color:0x77766b,roughness:1}));
-    stone.position.set(rx,ground+.15,rz);stone.scale.set(1.4,.7,1);scene.add(stone);
+    const stone=new THREE.Mesh(new THREE.DodecahedronGeometry(5+((i*11)%8),1),new THREE.MeshStandardMaterial({color:i%3===0?0x77766c:0x898477,roughness:1}));
+    stone.position.set(rx,ground+2,rz);stone.scale.set(1.5,.8,1.1);scene.add(stone);
   }
   islandData.push(island);
 }
 function islandGroundAt(x,z){
   let highest=null;
-  for(const island of islandData){const height=islandSurfaceAt(island,x,z);if(height!==null&&(highest===null||height>highest))highest=height;}
+  for(const island of islandData){
+    const height=islandSurfaceAt(island,x,z);
+    if(height!==null&&(highest===null||height>highest))highest=height;
+  }
   return highest;
 }
 [
-  [0,-112,32,13,1.2,true],[-108,58,35,15,2.8,true],[112,62,31,12,4.1,true],
-  [-165,-65,13,5,1.8,false],[165,-95,15,6,3.4,false],[-45,155,14,5,5.1,false],
-  [62,165,12,4.5,2.2,false],[178,112,11,4,4.7,false],[-178,120,12,4.5,3.1,false],
-  [28,-180,14,5,5.8,false],[-105,-160,10,3.8,.7,false]
+  [-26500,-22500,5200,390,1.2,true],
+  [27500,-21000,6100,470,2.8,true],
+  [5500,32500,5600,430,4.1,true],
+  [-41000,-9000,1750,150,1.8,false],
+  [41000,-12500,2100,175,3.4,false],
+  [-12000,43000,1850,145,5.1,false],
+  [20500,42000,1550,125,2.2,false],
+  [43500,26500,1650,135,4.7,false],
+  [-44000,30000,1800,155,3.1,false],
+  [9000,-43500,2000,160,5.8,false],
+  [-27500,-40500,1450,115,.7,false],
+  [34000,7000,1900,150,6.2,false],
+  [-6000,-12000,1200,95,2.4,false],
+  [12000,14500,1350,110,3.7,false],
+  [-36500,18500,1500,125,4.4,false],
+  [36500,42000,1250,100,1.1,false],
+  [-16000,5000,1050,90,5.5,false],
+  [46000,-39000,1300,105,2.9,false]
 ].forEach(args=>createIsland(...args));
+
 
 const plank=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x72583d,roughness:.96}));
 plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
@@ -553,7 +610,7 @@ function updatePlayer(dt,t){
       player.swimPosition.y=nextGround+player.height;player.velocity.y=0;
       camera.position.copy(player.swimPosition);camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
       underwaterOverlay.style.display="none";skyDome.visible=true;
-      scene.background.set(0x78929a);scene.fog.color.set(0x78929a);scene.fog.near=35;scene.fog.far=190;
+      scene.background.set(0x78929a);scene.fog.color.set(0x78929a);scene.fog.near=1800;scene.fog.far=9500;
       return;
     }
   }
@@ -646,8 +703,8 @@ function updatePlayer(dt,t){
     skyDome.visible=true;
     scene.background.set(0x78929a);
     scene.fog.color.set(0x78929a);
-    scene.fog.near=35;
-    scene.fog.far=190;
+    scene.fog.near=1800;
+    scene.fog.far=9500;
   }
   camera.position.copy(player.swimPosition);
   camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
@@ -668,7 +725,7 @@ function updatePickups(t,dt){
     pickupHint.style.display="block";
   }else pickupHint.style.display="none";
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateWind(dt);updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);updatePlacement();renderer.render(scene,camera);}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateWind(dt);updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);updatePlacement();skyDome.position.copy(camera.position);renderer.render(scene,camera);}
 animate();
 window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script>
