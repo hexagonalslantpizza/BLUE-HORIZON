@@ -26,8 +26,11 @@ The easiest way to run the prototype is with **Visual Studio Code** and the **Li
 
 | Input | Action |
 | --- | --- |
-| W A S D | Move around on the driftwood |
+| W A S D | Move on driftwood / swim |
 | Mouse | Look around |
+| Space | Swim upward / return to the surface |
+| Left or Right Ctrl | Dive downward |
+| E | Climb onto the driftwood when close to it |
 | ESC | Release the mouse cursor |
 
 Click **ENTER OCEAN** to begin and capture the mouse.
@@ -37,7 +40,10 @@ Click **ENTER OCEAN** to begin and capture the mouse.
 - Animated ocean surface with small waves
 - A floating piece of driftwood that tilts with the waves
 - Basic first-person camera and movement
-- Falling into the water when you walk off the driftwood
+- Swimming with momentum and water resistance
+- Diving underwater and swimming back toward the surface
+- Underwater color and fog effect
+- Climbing back onto the driftwood when close to it
 
 This is an early prototype. Multiplayer, saving, crafting, resource gathering, and the larger survival systems are not implemented yet.
 
