@@ -154,8 +154,6 @@ function updatePlayer(dt,t){
 
   if(!player.inWater){
     const localMove=move.clone().applyQuaternion(wood.quaternion.clone().invert());
-    player.local.x+=localMove.x*2.25*dt;
-    player.local.z+=localMove.z*2.25*dt;
     if(player.boardGrounded){
       player.local.x+=localMove.x*2.25*dt;
       player.local.z+=localMove.z*2.25*dt;
