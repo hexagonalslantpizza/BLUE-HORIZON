@@ -295,7 +295,7 @@ let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
 const underwaterOverlay=document.getElementById("underwater");
 document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
-document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=(pointerLocked||craftPanel.style.display==="block")?"none":"grid";});
+document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=(pointerLocked||craftPanel.style.display==="block"||sailPanel.style.display==="block")?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
 function isAimingAtSail(){if(!sailRig)return false;placementRaycaster.setFromCamera(placementPointer,camera);const hits=placementRaycaster.intersectObject(sailRig,true);return hits.length>0&&hits[0].distance<4.5;}
