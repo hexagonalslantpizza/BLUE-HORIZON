@@ -20,7 +20,7 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </head>
 <body>
 <div id="overlay"><div id="panel"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><p>WASD to move · Mouse to look · ESC to release the mouse</p><button id="start">ENTER OCEAN</button></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — rise underwater / jump at surface<br>CTRL — dive<br>E — climb onto driftwood<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
+<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — rise underwater / jump / climb aboard<br>CTRL — dive<br>E — climb aboard<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -30,18 +30,17 @@ scene.fog=new THREE.Fog(0x78929a,35,190);
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);
 camera.rotation.order="YXZ";
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.45));
 renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled=false;
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=.9;
 document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xc5d9d8,0x263b3d,1.15));
 const sun=new THREE.DirectionalLight(0xffe4bd,1.6);
-sun.position.set(-35,55,20);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
-const oceanGeometry=new THREE.PlaneGeometry(420,420,180,180);
+sun.position.set(-35,55,20);sun.castShadow=false;scene.add(sun);
+const oceanGeometry=new THREE.PlaneGeometry(420,420,140,140);
 oceanGeometry.rotateX(-Math.PI/2);
 const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05,side:THREE.DoubleSide});
 const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
@@ -52,18 +51,23 @@ const waveLayers=[
   {dx:.42,dz:1,amplitude:.22,length:11,speed:1.35,steepness:.38},
   {dx:-.78,dz:.62,amplitude:.105,length:5.5,speed:1.8,steepness:.28},
   {dx:.15,dz:-1,amplitude:.045,length:2.4,speed:2.5,steepness:.18}
-];
+].map(wave=>{
+  const directionLength=Math.hypot(wave.dx,wave.dz);
+  return {...wave,dx:wave.dx/directionLength,dz:wave.dz/directionLength,k:2*Math.PI/wave.length};
+});
+const waveResult={height:0,x:0,z:0};
 function waveSample(x,z,t){
   let height=0,offsetX=0,offsetZ=0;
-  for(const wave of waveLayers){
-    const length=Math.hypot(wave.dx,wave.dz),dx=wave.dx/length,dz=wave.dz/length;
-    const k=2*Math.PI/wave.length,phase=k*(dx*x+dz*z)-wave.speed*t;
+  for(let i=0;i<waveLayers.length;i++){
+    const wave=waveLayers[i];
+    const phase=wave.k*(wave.dx*x+wave.dz*z)-wave.speed*t;
     const a=wave.amplitude;
     height+=a*Math.sin(phase);
     const horizontal=wave.steepness*a*Math.cos(phase);
-    offsetX+=dx*horizontal;offsetZ+=dz*horizontal;
+    offsetX+=wave.dx*horizontal;offsetZ+=wave.dz*horizontal;
   }
-  return {height,x:offsetX,z:offsetZ};
+  waveResult.height=height;waveResult.x=offsetX;waveResult.z=offsetZ;
+  return waveResult;
 }
 function waveHeight(x,z,t){return waveSample(x,z,t).height;}
 function surfaceNormal(x,z,t){
@@ -99,6 +103,21 @@ document.getElementById("start").addEventListener("click",()=>renderer.domElemen
 document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=pointerLocked?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
+function climbOntoWood(){
+  if(!player.inWater||player.fallingIntoWater)return false;
+  const relative=player.swimPosition.clone().sub(wood.position).applyQuaternion(wood.quaternion.clone().invert());
+  const edgeX=Math.max(0,Math.abs(relative.x)-.95);
+  const edgeZ=Math.max(0,Math.abs(relative.z)-.825);
+  const reach=Math.hypot(edgeX,edgeZ);
+  const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+  const nearSurface=player.swimPosition.y>=surface-.85&&player.swimPosition.y<=surface+1.15;
+  if(reach>1.35||!nearSurface)return false;
+  player.inWater=false;fallen=false;player.fallingIntoWater=false;
+  player.local.set(THREE.MathUtils.clamp(relative.x,-.62,.62),0,THREE.MathUtils.clamp(relative.z,-.48,.48));
+  player.velocity.set(0,0,0);player.boardJumpVelocity=0;player.boardGrounded=true;player.pitch=0;
+  underwaterOverlay.style.display="none";
+  return true;
+}
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
   if(e.code==="Space"&&!e.repeat){
@@ -106,33 +125,32 @@ document.addEventListener("keydown",e=>{
       player.boardJumpVelocity=4.7;
       player.boardGrounded=false;
     }else if(player.inWater){
-      const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-      if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+      if(!climbOntoWood()){
+        const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+        if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+      }
     }
   }
   keys.add(e.code);
-  if(e.code==="KeyE"&&player.inWater){
-    const dx=player.swimPosition.x-wood.position.x;
-    const dz=player.swimPosition.z-wood.position.z;
-    const distance=Math.hypot(dx,dz);
-    const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-    if(distance<1.75&&Math.abs(player.swimPosition.y-surface)<1.35){
-      player.inWater=false;fallen=false;player.local.set(0,0,0);player.velocity.set(0,0,0);player.pitch=0;
-    }
-  }
+  if(e.code==="KeyE")climbOntoWood();
 });
 document.addEventListener("keyup",e=>keys.delete(e.code));
 window.addEventListener("blur",()=>keys.clear());
-const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3();
+const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3(),localMove=new THREE.Vector3(),inverseWoodQuaternion=new THREE.Quaternion();
 let elapsed=0;
+let normalUpdateCounter=0;
 function updateOcean(t){
+  const positionArray=positions.array;
   for(let i=0;i<positions.count;i++){
-    const x=basePositions[i*3],z=basePositions[i*3+2],sample=waveSample(x,z,t);
-    positions.array[i*3]=x+sample.x;
-    positions.array[i*3+1]=sample.height;
-    positions.array[i*3+2]=z+sample.z;
+    const index=i*3,x=basePositions[index],z=basePositions[index+2];
+    const sample=waveSample(x,z,t);
+    positionArray[index]=x+sample.x;
+    positionArray[index+1]=sample.height;
+    positionArray[index+2]=z+sample.z;
   }
-  positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
+  positions.needsUpdate=true;
+  // Wave positions update every frame; lighting normals update every third frame.
+  if(++normalUpdateCounter%3===0)oceanGeometry.computeVertexNormals();
 }
 function updateDriftwood(t){
   const driftX=Math.sin(t*.11)*2.4+Math.sin(t*.047)*1.1;
@@ -153,7 +171,7 @@ function updatePlayer(dt,t){
   if(move.lengthSq()>0)move.normalize();
 
   if(!player.inWater){
-    const localMove=move.clone().applyQuaternion(wood.quaternion.clone().invert());
+    localMove.copy(move).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
     if(player.boardGrounded){
       player.local.x+=localMove.x*2.25*dt;
       player.local.z+=localMove.z*2.25*dt;
