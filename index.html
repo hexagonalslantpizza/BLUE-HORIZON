@@ -13,7 +13,7 @@ h1{margin:0 0 8px;letter-spacing:.16em;font-size:23px}
 p{color:#c0d0ce;line-height:1.5;font-size:14px}
 button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
-#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}#windCompass{position:fixed;left:14px;top:14px;z-index:3;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#07141bdc;border:1px solid #bedcdc55;border-radius:7px;backdrop-filter:blur(5px);pointer-events:none}#windDial{width:38px;height:38px;border:1px solid #c5d7cf88;border-radius:50%;display:grid;place-items:center;position:relative;background:#071b20aa}#windArrow{font-size:27px;line-height:1;color:#e5d6a8;transform:rotate(0deg);text-shadow:0 1px 5px #000}#windText{font-size:10px;letter-spacing:.12em;color:#d4e0d9}#windStrength{display:block;margin-top:3px;font-size:10px;letter-spacing:.04em;color:#9fb9b2}
+#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}#windCompass{position:fixed;left:14px;top:14px;z-index:3;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#07141bdc;border:1px solid #bedcdc55;border-radius:7px;backdrop-filter:blur(5px);pointer-events:none}#windDial{width:54px;height:54px;border:1px solid #c5d7cf88;border-radius:50%;display:grid;place-items:center;position:relative;background:#071b20aa}#windArrow{position:absolute;left:50%;top:50%;font-size:27px;line-height:1;color:#e5d6a8;transform:translate(-50%,-50%) rotate(0deg);text-shadow:0 1px 5px #000}#shipDot{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:50%;background:#73d8e8;border:1px solid #efffff;box-shadow:0 0 7px #48c9e8;transform:translate(-50%,-50%)}#compassLegend{display:block;margin-top:3px;font-size:9px;letter-spacing:.04em;color:#73d8e8}#windText{font-size:10px;letter-spacing:.12em;color:#d4e0d9}#windStrength{display:block;margin-top:3px;font-size:10px;letter-spacing:.04em;color:#9fb9b2}
 #underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
 #survivalUI{position:fixed;left:14px;bottom:14px;z-index:3;background:#07141bdc;border:1px solid #bedcdc44;border-radius:7px;padding:12px 14px;min-width:190px;font-size:12px;backdrop-filter:blur(5px)}
 #survivalUI strong{letter-spacing:.12em;font-size:11px;color:#d9e7df}
@@ -31,7 +31,7 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </head>
 <body>
 <div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>Wind compass</b> — Arrow shows the direction wind is blowing</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect supplies / interact with sail</p><p><b>B</b> — Open raft workshop</p><p><b>Left click</b> — Place selected piece</p><p><b>ESC</b> — Cancel placement</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
-<div id="crosshair"></div><div id="windCompass"><div id="windDial"><div id="windArrow">↑</div></div><div id="windText">WIND<span id="windStrength">STEADY</span></div></div><div id="status">FIELD TEST 004</div><div id="underwater" aria-hidden="true"></div>
+<div id="crosshair"></div><div id="windCompass"><div id="windDial"><div id="windArrow">↑</div><div id="shipDot"></div></div><div id="windText">WIND<span id="windStrength">STEADY</span><span id="compassLegend">● SHIP DRIFT</span></div></div><div id="status">FIELD TEST 004</div><div id="underwater" aria-hidden="true"></div>
 <div id="survivalUI"><strong>INVENTORY</strong><div id="inventoryRows"><span>Wood: <b id="woodCount">0</b></span><span>Rope: <b id="ropeCount">0</b></span><span>Cloth: <b id="clothCount">0</b></span></div><p style="margin:8px 0 0;font-size:10px">Press B to craft and build</p></div>
 <div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Choose a piece, then aim at a valid snap point.</p><button id="buildPlank">SELECT WOODEN FLOOR · 2 WOOD</button><button id="buildSail">SELECT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><button id="closeCraft">CLOSE · B</button></div><div id="sailPanel"><h2>SAIL CONTROLS</h2><p>Adjust the sail while standing nearby.</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div><button id="closeSail">CLOSE</button></div><div id="pickupHint"></div><div id="placementHint">AIM AT A VALID SNAP POINT · CLICK TO PLACE · ESC TO CANCEL</div>
 <div id="pickupHint"></div>
@@ -127,7 +127,78 @@ const windDirection=new THREE.Vector3();
 const windForce=new THREE.Vector3();
 const windVelocity=new THREE.Vector3();
 let hullHeading=0;
-const windArrow=document.getElementById("windArrow"),windStrength=document.getElementById("windStrength");
+const windArrow=document.getElementById("windArrow"),windStrength=document.getElementById("windStrength"),shipDot=document.getElementById("shipDot");
+const islandData=[];
+function islandEdge(angle,seed){return 1+Math.sin(angle*3+seed)*.055+Math.sin(angle*5-seed*1.7)*.035+Math.cos(angle*2+seed*.6)*.045;}
+function islandSurfaceAt(island,x,z){
+  const dx=x-island.x,dz=z-island.z,angle=Math.atan2(dz,dx),distance=Math.hypot(dx,dz);
+  const normalized=distance/(island.radius*islandEdge(angle,island.seed));
+  if(normalized>=1)return null;
+  return -.16+Math.pow(Math.max(0,1-normalized),1.35)*island.peak;
+}
+function createIsland(x,z,radius,peak,seed,large){
+  const island={x,z,radius,peak,seed},segments=72,rings=15,vertices=[],colors=[],indices=[];
+  const sand=new THREE.Color(0xb5a77d),grass=new THREE.Color(0x65764b),rock=new THREE.Color(0x66675b);
+  vertices.push(x,-.16,z);colors.push(sand.r,sand.g,sand.b);
+  for(let ring=1;ring<=rings;ring++){
+    const t=ring/rings;
+    for(let i=0;i<segments;i++){
+      const angle=i/segments*Math.PI*2,distance=radius*islandEdge(angle,seed)*t;
+      const px=x+Math.cos(angle)*distance,pz=z+Math.sin(angle)*distance;
+      const py=-.16+Math.pow(Math.max(0,1-t),1.35)*peak;
+      vertices.push(px,py,pz);
+      const color=t>.84?sand:(py>peak*.48?rock:grass);
+      colors.push(color.r,color.g,color.b);
+    }
+  }
+  for(let i=0;i<segments;i++)indices.push(0,1+i,1+(i+1)%segments);
+  for(let ring=0;ring<rings-1;ring++){
+    const start=1+ring*segments,next=start+segments;
+    for(let i=0;i<segments;i++){
+      const a=start+i,b=start+(i+1)%segments,c=next+i,d=next+(i+1)%segments;
+      indices.push(a,c,b,b,c,d);
+    }
+  }
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
+  geometry.setAttribute("color",new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);geometry.computeVertexNormals();
+  const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:true,side:THREE.DoubleSide}));
+  terrain.position.y=.04;scene.add(terrain);
+  const treeCount=large?12:4;
+  for(let i=0;i<treeCount;i++){
+    const angle=i/treeCount*Math.PI*2+seed,t=.28+((i*37+seed*13)%53)/100;
+    const distance=radius*t*islandEdge(angle,seed),tx=x+Math.cos(angle)*distance,tz=z+Math.sin(angle)*distance;
+    const ground=islandSurfaceAt(island,tx,tz);if(ground===null)continue;
+    const tree=new THREE.Group();tree.position.set(tx,ground+.05,tz);
+    const trunkHeight=(large?2.6:1.8)+((i*17)%7)*.12;
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.13,.22,trunkHeight,7),new THREE.MeshStandardMaterial({color:0x65503a,roughness:1}));
+    trunk.position.y=trunkHeight/2;tree.add(trunk);
+    const crown=new THREE.Mesh(new THREE.ConeGeometry(large?1.35:.9,large?2.5:1.7,7),new THREE.MeshStandardMaterial({color:i%3===0?0x536b45:0x718052,roughness:1}));
+    crown.position.y=trunkHeight+.65;tree.add(crown);scene.add(tree);
+  }
+  const rockCount=large?10:4;
+  for(let i=0;i<rockCount;i++){
+    const angle=i/rockCount*Math.PI*2+seed*.7,distance=radius*(.82+((i*19)%13)/100)*islandEdge(angle,seed);
+    const rx=x+Math.cos(angle)*distance,rz=z+Math.sin(angle)*distance,ground=islandSurfaceAt(island,rx,rz);
+    if(ground===null)continue;
+    const stone=new THREE.Mesh(new THREE.DodecahedronGeometry(.45+((i*7)%5)*.11,0),new THREE.MeshStandardMaterial({color:0x77766b,roughness:1}));
+    stone.position.set(rx,ground+.15,rz);stone.scale.set(1.4,.7,1);scene.add(stone);
+  }
+  islandData.push(island);
+}
+function islandGroundAt(x,z){
+  let highest=null;
+  for(const island of islandData){const height=islandSurfaceAt(island,x,z);if(height!==null&&(highest===null||height>highest))highest=height;}
+  return highest;
+}
+[
+  [0,-112,32,13,1.2,true],[-108,58,35,15,2.8,true],[112,62,31,12,4.1,true],
+  [-165,-65,13,5,1.8,false],[165,-95,15,6,3.4,false],[-45,155,14,5,5.1,false],
+  [62,165,12,4.5,2.2,false],[178,112,11,4,4.7,false],[-178,120,12,4.5,3.1,false],
+  [28,-180,14,5,5.8,false],[-105,-160,10,3.8,.7,false]
+].forEach(args=>createIsland(...args));
+
 const plank=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x72583d,roughness:.96}));
 plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
 const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1});
@@ -375,6 +446,12 @@ function updateWind(dt){
   const relativeAngle=wind.angle+player.yaw;
   windArrow.style.transform=`rotate(${relativeAngle*180/Math.PI}deg)`;
   windStrength.textContent=wind.speed<4.8?"LIGHT BREEZE":wind.speed>5.8?"STRONG BREEZE":"STEADY BREEZE";
+  const shipRight=new THREE.Vector3(Math.cos(player.yaw),0,-Math.sin(player.yaw));
+  const shipForward=new THREE.Vector3(-Math.sin(player.yaw),0,-Math.cos(player.yaw));
+  const side=windVelocity.dot(shipRight),ahead=windVelocity.dot(shipForward);
+  const compassScale=20/3.8;
+  shipDot.style.left=(27+THREE.MathUtils.clamp(side*compassScale,-20,20))+"px";
+  shipDot.style.top=(27-THREE.MathUtils.clamp(ahead*compassScale,-20,20))+"px";
 }
 function updateDriftwood(t,dt){
   const driftX=Math.sin(t*.11)*.65+Math.sin(t*.047)*.35;
@@ -465,6 +542,21 @@ function updatePlayer(dt,t){
   if(keys.has("KeyA"))swimInput.sub(right);
   if(swimInput.lengthSq()>0)swimInput.normalize();
 
+  const islandGround=islandGroundAt(player.swimPosition.x,player.swimPosition.z);
+  if(islandGround!==null&&islandGround>surface+.08){
+    player.velocity.x+=swimInput.x*4.2*dt;player.velocity.z+=swimInput.z*4.2*dt;
+    player.velocity.x*=Math.exp(-5.5*dt);player.velocity.z*=Math.exp(-5.5*dt);
+    player.swimPosition.x+=player.velocity.x*dt;player.swimPosition.z+=player.velocity.z*dt;
+    const nextGround=islandGroundAt(player.swimPosition.x,player.swimPosition.z);
+    const nextWater=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
+    if(nextGround!==null&&nextGround>nextWater+.08){
+      player.swimPosition.y=nextGround+player.height;player.velocity.y=0;
+      camera.position.copy(player.swimPosition);camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+      underwaterOverlay.style.display="none";skyDome.visible=true;
+      scene.background.set(0x78929a);scene.fog.color.set(0x78929a);scene.fog.near=35;scene.fog.far=190;
+      return;
+    }
+  }
   const underwaterNow=player.swimPosition.y<surface-.12;
   const previousBoardLocalY=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert()).y;
   if(player.fallingIntoWater){
