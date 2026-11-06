@@ -242,7 +242,7 @@ function updatePlayer(dt,t){
 
   player.velocity.x*=Math.exp(-(underwaterNow?2.4:2.0)*dt);
   player.velocity.z*=Math.exp(-(underwaterNow?2.4:2.0)*dt);
-  player.velocity.y*=Math.exp(-(diving?1.4:2.2)*dt);
+  player.velocity.y*=Math.exp(-(player.waterJumping?.12:(diving?1.4:2.2))*dt);
   player.swimPosition.addScaledVector(player.velocity,dt);
 
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
