@@ -1,2 +1,107 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>BLUE HORIZON</title></head><body><h1>BLUE HORIZON</h1><p>Ocean prototype coming soon.</p></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLUE HORIZON — Ocean Prototype</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071b28}
+body{font-family:Arial,sans-serif;color:#e8f0ed}canvas{display:block}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:#020c137a;z-index:5;text-align:center}
+#panel{max-width:430px;margin:20px;padding:24px 28px;background:#07141be0;border:1px solid #bedcdc33;border-radius:8px;box-shadow:0 12px 50px #0008}
+h1{margin:0 0 8px;letter-spacing:.16em;font-size:23px}
+p{color:#c0d0ce;line-height:1.5;font-size:14px}
+button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
+#hud{position:fixed;left:16px;bottom:14px;z-index:2;color:#dce9e5;font-size:12px;line-height:1.5;text-shadow:0 2px 4px #000;pointer-events:none}
+#crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
+#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="overlay"><div id="panel"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><p>WASD to move · Mouse to look · ESC to release the mouse</p><button id="start">ENTER OCEAN</button></div></div>
+<div id="crosshair"></div><div id="status">FIELD TEST 001</div><div id="hud">WASD — move<br>Mouse — look<br>Stay on the driftwood.</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from "three";
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x78929a);
+scene.fog=new THREE.Fog(0x78929a,35,190);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);
+camera.rotation.order="YXZ";
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=.9;
+document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc5d9d8,0x263b3d,1.15));
+const sun=new THREE.DirectionalLight(0xffe4bd,1.6);
+sun.position.set(-35,55,20);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+const oceanGeometry=new THREE.PlaneGeometry(420,420,180,180);
+oceanGeometry.rotateX(-Math.PI/2);
+const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05});
+const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
+const positions=oceanGeometry.attributes.position;
+const basePositions=positions.array.slice();
+function waveHeight(x,z,t){
+return Math.sin(x*.105+t*.85)*.19+Math.sin(z*.078-t*.62)*.14+Math.sin((x+z)*.045+t*.43)*.11+Math.sin((x*.7-z)*.16+t*1.15)*.045;
+}
+function surfaceNormal(x,z,t){
+const e=.12;
+const dx=(waveHeight(x+e,z,t)-waveHeight(x-e,z,t))/(2*e);
+const dz=(waveHeight(x,z+e,t)-waveHeight(x,z-e,t))/(2*e);
+return new THREE.Vector3(-dx,1,-dz).normalize();
+}
+const wood=new THREE.Group();scene.add(wood);
+const plank=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x72583d,roughness:.96}));
+plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
+const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1});
+for(let i=0;i<5;i++){const groove=new THREE.Mesh(new THREE.BoxGeometry(1.55,.012,.018),grainMaterial);groove.position.set(0,.116,-.58+i*.28);wood.add(groove);}
+const knot=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.012,12),new THREE.MeshStandardMaterial({color:0x3d3026,roughness:1}));
+knot.rotation.x=Math.PI/2;knot.position.set(-.42,.12,.18);wood.add(knot);
+const player={local:new THREE.Vector3(),velocity:new THREE.Vector3(),height:1.68,yaw:0,pitch:0};
+let pointerLocked=false,fallen=false;
+const overlay=document.getElementById("overlay");
+document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
+document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=pointerLocked?"none":"grid";});
+document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
+const keys=new Set();
+document.addEventListener("keydown",e=>keys.add(e.code));
+document.addEventListener("keyup",e=>keys.delete(e.code));
+window.addEventListener("blur",()=>keys.clear());
+const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3();
+let elapsed=0;
+function updateOcean(t){
+for(let i=0;i<positions.count;i++){const x=basePositions[i*3],z=basePositions[i*3+2];positions.array[i*3+1]=waveHeight(x,z,t);}
+positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
+}
+function updateDriftwood(t){
+wood.position.set(0,waveHeight(0,0,t)+.12,0);
+wood.quaternion.setFromUnitVectors(up,surfaceNormal(0,0,t));
+wood.rotateY(Math.sin(t*.22)*.025);
+}
+function updatePlayer(dt,t){
+forward.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw)).normalize();
+right.set(Math.cos(player.yaw),0,-Math.sin(player.yaw)).normalize();
+move.set(0,0,0);
+if(keys.has("KeyW"))move.add(forward);if(keys.has("KeyS"))move.sub(forward);
+if(keys.has("KeyD"))move.add(right);if(keys.has("KeyA"))move.sub(right);
+if(move.lengthSq()>0)move.normalize();
+if(!fallen){
+player.local.x+=move.x*2.25*dt;player.local.z+=move.z*2.25*dt;
+if(Math.abs(player.local.x)>1.03||Math.abs(player.local.z)>.91){fallen=true;player.velocity.y=-.2;}
+}else{player.velocity.y-=9.8*dt;player.local.y+=player.velocity.y*dt;}
+const worldPosition=new THREE.Vector3(player.local.x,0,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
+if(fallen){const waterY=waveHeight(worldPosition.x,worldPosition.z,t);worldPosition.y=Math.max(waterY+.15,worldPosition.y+player.local.y);player.local.y=worldPosition.y-waterY-.15;}
+else worldPosition.y+=player.height;
+camera.position.copy(worldPosition);camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed);updatePlayer(dt,elapsed);renderer.render(scene,camera);}
+animate();
+window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script>
+</body>
+</html>
