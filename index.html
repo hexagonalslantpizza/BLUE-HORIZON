@@ -72,7 +72,7 @@ const player={
   inWater:false,
   diving:false
 };
-let pointerLocked=false,fallen=false;
+let pointerLocked=false,fallen=false;\nlet driftX=0,driftZ=0;
 const overlay=document.getElementById("overlay");
 const underwaterOverlay=document.getElementById("underwater");
 document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
@@ -133,11 +133,10 @@ function updatePlayer(dt,t){
     }
   }
 
-  // Swimming uses its own world-space velocity; water slows movement and gently
-  // supports the player near the surface instead of treating water as a death plane.
+  // Water movement has drag and neutral buoyancy. CTRL is a deliberate dive;
+  // SPACE is a one-time surface jump on key press, never continuous lift.
   const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
   const diving=keys.has("ControlLeft")||keys.has("ControlRight");
-  const rising=keys.has("Space");
   const lookDirection=new THREE.Vector3(
     -Math.sin(player.yaw)*Math.cos(player.pitch),
     Math.sin(player.pitch),
@@ -150,28 +149,34 @@ function updatePlayer(dt,t){
   if(keys.has("KeyA"))swimInput.sub(right);
   if(swimInput.lengthSq()>0)swimInput.normalize();
 
-  const swimAcceleration=diving||player.swimPosition.y<surface-.45?5.0:3.6;
+  const underwaterNow=player.swimPosition.y<surface-.12;
+  const swimAcceleration=underwaterNow?3.0:2.6;
   player.velocity.x+=swimInput.x*swimAcceleration*dt;
   player.velocity.z+=swimInput.z*swimAcceleration*dt;
-  if(diving)player.velocity.y-=5.2*dt;
-  else if(rising)player.velocity.y+=6.2*dt;
-  else if(player.swimPosition.y<surface-.28)player.velocity.y+=3.1*dt;
-  else player.velocity.y+=(surface+.22-player.swimPosition.y)*3.0*dt;
 
-  const drag=Math.exp(-2.0*dt);
-  player.velocity.x*=drag;
-  player.velocity.z*=drag;
-  player.velocity.y*=Math.exp(-1.25*dt);
+  if(diving)player.velocity.y-=3.2*dt;
+  else if(!underwaterNow){
+    const targetY=surface+.18;
+    player.velocity.y+=(targetY-player.swimPosition.y)*2.8*dt;
+  }else{
+    // Hold depth when no vertical input is given; don't automatically float up.
+    player.velocity.y*=Math.exp(-5.5*dt);
+    if(Math.abs(player.velocity.y)<.035)player.velocity.y=0;
+  }
+
+  player.velocity.x*=Math.exp(-1.7*dt);
+  player.velocity.z*=Math.exp(-1.7*dt);
+  player.velocity.y*=Math.exp(-(diving?1.4:2.2)*dt);
   player.swimPosition.addScaledVector(player.velocity,dt);
 
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
-  // A buoyant surface limit keeps the player afloat unless they deliberately dive.
-  if(!diving&&!rising&&player.swimPosition.y<newSurface+.12){
-    player.swimPosition.y=newSurface+.12;
-    if(player.velocity.y<0)player.velocity.y=0;
+  if(!diving&&player.swimPosition.y>newSurface+.55){
+    player.swimPosition.y=newSurface+.55;
+    if(player.velocity.y>0)player.velocity.y=0;
   }
-  if(player.swimPosition.y>newSurface+.65&&!rising&&!diving){
-    player.swimPosition.y+=(newSurface+.35-player.swimPosition.y)*Math.min(1,dt*2.5);
+  if(!diving&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
+    player.swimPosition.y=newSurface-.08;
+    player.velocity.y=0;
   }
 
   const underwater=player.swimPosition.y<newSurface-.05;
@@ -190,7 +195,7 @@ function updatePlayer(dt,t){
   camera.position.copy(player.swimPosition);
   camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed);updatePlayer(dt,elapsed);renderer.render(scene,camera);}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);renderer.render(scene,camera);}
 animate();
 window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script>
