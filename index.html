@@ -45,7 +45,7 @@ const skyMaterial=new THREE.ShaderMaterial({
       vec3 sky=mix(horizon,zenith,pow(h,0.62));
       vec3 sunDir=normalize(vec3(-0.52,0.48,0.70));
       float sunDot=max(dot(dir,sunDir),0.0);
-      float glow=pow(sunDot,10.0)*0.20+pow(sunDot,48.0)*0.0;
+      float glow=pow(sunDot,10.0)*0.20;
       float disc=smoothstep(0.9990,0.9997,sunDot);
       sky+=vec3(1.0,0.76,0.49)*(glow+disc*0.75);
       float haze=exp(-pow(dir.y*18.0,2.0))*0.16;
@@ -312,11 +312,13 @@ function updatePlayer(dt,t){
   const underwater=player.swimPosition.y<newSurface-.05;
   underwaterOverlay.style.display=underwater?"block":"none";
   if(underwater){
+    skyDome.visible=false;
     scene.background.set(0x123d50);
     scene.fog.color.set(0x123d50);
     scene.fog.near=2;
     scene.fog.far=42;
   }else{
+    skyDome.visible=true;
     scene.background.set(0x78929a);
     scene.fog.color.set(0x78929a);
     scene.fog.near=35;
