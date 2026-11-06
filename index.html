@@ -8,19 +8,18 @@
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071b28}
 body{font-family:Arial,sans-serif;color:#e8f0ed}canvas{display:block}
 #overlay{position:fixed;inset:0;display:grid;place-items:center;background:#020c137a;z-index:5;text-align:center}
-#panel{max-width:430px;margin:20px;padding:24px 28px;background:#07141be0;border:1px solid #bedcdc33;border-radius:8px;box-shadow:0 12px 50px #0008}
+#panel{max-width:430px;margin:20px;padding:24px 28px;background:#07141be0;border:1px solid #bedcdc33;border-radius:8px;box-shadow:0 12px 50px #0008}#controlsPanel{display:none}#menuButtons{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}#controlsPanel p{margin:9px 0}
 h1{margin:0 0 8px;letter-spacing:.16em;font-size:23px}
 p{color:#c0d0ce;line-height:1.5;font-size:14px}
 button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
-#hud{position:fixed;left:16px;bottom:14px;z-index:2;color:#dce9e5;font-size:12px;line-height:1.5;text-shadow:0 2px 4px #000;pointer-events:none}
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
 #status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
 #underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
 </style>
 </head>
 <body>
-<div id="overlay"><div id="panel"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><p>WASD to move · Mouse to look · ESC to release the mouse</p><button id="start">ENTER OCEAN</button></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — rise underwater / jump / climb aboard<br>CTRL — dive<br>E — climb aboard<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
+<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump onto driftwood or rise while underwater</p><p><b>CTRL</b> — Dive underwater</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
+<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="underwater" aria-hidden="true"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -94,7 +93,8 @@ const player={
   diving:false,
   boardGrounded:true,
   boardJumpVelocity:0,
-  fallingIntoWater:false
+  fallingIntoWater:false,
+  waterJumping:false
 };
 let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
@@ -103,21 +103,9 @@ document.getElementById("start").addEventListener("click",()=>renderer.domElemen
 document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=pointerLocked?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
-function climbOntoWood(){
-  if(!player.inWater||player.fallingIntoWater)return false;
-  const relative=player.swimPosition.clone().sub(wood.position).applyQuaternion(wood.quaternion.clone().invert());
-  const edgeX=Math.max(0,Math.abs(relative.x)-.95);
-  const edgeZ=Math.max(0,Math.abs(relative.z)-.825);
-  const reach=Math.hypot(edgeX,edgeZ);
-  const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-  const nearSurface=player.swimPosition.y>=surface-.85&&player.swimPosition.y<=surface+1.15;
-  if(reach>1.35||!nearSurface)return false;
-  player.inWater=false;fallen=false;player.fallingIntoWater=false;
-  player.local.set(THREE.MathUtils.clamp(relative.x,-.62,.62),0,THREE.MathUtils.clamp(relative.z,-.48,.48));
-  player.velocity.set(0,0,0);player.boardJumpVelocity=0;player.boardGrounded=true;player.pitch=0;
-  underwaterOverlay.style.display="none";
-  return true;
-}
+const mainMenu=document.getElementById("mainMenu"),controlsPanel=document.getElementById("controlsPanel");
+document.getElementById("showControls").addEventListener("click",()=>{mainMenu.style.display="none";controlsPanel.style.display="block";});
+document.getElementById("backToMenu").addEventListener("click",()=>{controlsPanel.style.display="none";mainMenu.style.display="block";});
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
   if(e.code==="Space"&&!e.repeat){
@@ -125,18 +113,20 @@ document.addEventListener("keydown",e=>{
       player.boardJumpVelocity=4.7;
       player.boardGrounded=false;
     }else if(player.inWater){
-      if(!climbOntoWood()){
-        const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-        if(player.swimPosition.y>=surface-.12&&player.swimPosition.y<=surface+.8)player.velocity.y=2.2;
+      const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+      if(player.swimPosition.y>=surface-.2&&player.swimPosition.y<=surface+.9){
+        player.velocity.y=7.2;
+        player.waterJumping=true;
+      }else{
+        player.velocity.y=2.2;
       }
     }
   }
   keys.add(e.code);
-  if(e.code==="KeyE")climbOntoWood();
 });
 document.addEventListener("keyup",e=>keys.delete(e.code));
 window.addEventListener("blur",()=>keys.clear());
-const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3(),localMove=new THREE.Vector3(),inverseWoodQuaternion=new THREE.Quaternion();
+const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3(),localMove=new THREE.Vector3(),inverseWoodQuaternion=new THREE.Quaternion(),boardRelative=new THREE.Vector3();
 let elapsed=0;
 let normalUpdateCounter=0;
 function updateOcean(t){
@@ -217,6 +207,7 @@ function updatePlayer(dt,t){
   if(swimInput.lengthSq()>0)swimInput.normalize();
 
   const underwaterNow=player.swimPosition.y<surface-.12;
+  const previousBoardLocalY=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert()).y;
   if(player.fallingIntoWater){
     player.velocity.y-=9.8*dt;
     player.swimPosition.addScaledVector(player.velocity,dt);
@@ -234,7 +225,9 @@ function updatePlayer(dt,t){
   player.velocity.x+=swimInput.x*swimAcceleration*dt;
   player.velocity.z+=swimInput.z*swimAcceleration*dt;
 
-  if(diving)player.velocity.y-=3.2*dt;
+  if(player.waterJumping){
+    player.velocity.y-=9.8*dt;
+  }else if(diving)player.velocity.y-=3.2*dt;
   else if(underwaterNow&&keys.has("Space")){
     player.velocity.y+=5.8*dt;
   }
@@ -253,11 +246,37 @@ function updatePlayer(dt,t){
   player.swimPosition.addScaledVector(player.velocity,dt);
 
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
-  if(!diving&&player.swimPosition.y>newSurface+.9){
+  const boardLocal=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
+  const boardTop=.11;
+  const insideBoardTop=Math.abs(boardLocal.x)<.77&&Math.abs(boardLocal.z)<.64;
+  if(player.waterJumping&&player.velocity.y<=0&&previousBoardLocalY>boardTop+player.height&&boardLocal.y<=boardTop+player.height&&insideBoardTop){
+    player.inWater=false;player.waterJumping=false;player.fallingIntoWater=false;player.velocity.set(0,0,0);
+    player.local.set(boardLocal.x,0,boardLocal.z);player.boardGrounded=true;player.pitch=0;
+    underwaterOverlay.style.display="none";
+    const landedPosition=new THREE.Vector3(player.local.x,player.height,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
+    camera.position.copy(landedPosition);camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+    return;
+  }
+  if(player.waterJumping&&player.swimPosition.y<=newSurface+.18&&player.velocity.y<=0){
+    player.waterJumping=false;player.swimPosition.y=newSurface+.18;player.velocity.y=0;
+  }
+  // The plank blocks swimmers below its top; approaching players are pushed around its edges.
+  if(!player.waterJumping){
+    const bodyBottom=boardLocal.y-player.height;
+    const verticalOverlap=bodyBottom<boardTop&&boardLocal.y>-.11;
+    if(verticalOverlap&&Math.abs(boardLocal.x)<1.23&&Math.abs(boardLocal.z)<1.08){
+      const pushX=1.23-Math.abs(boardLocal.x),pushZ=1.08-Math.abs(boardLocal.z);
+      if(pushX<pushZ)boardLocal.x=Math.sign(boardLocal.x||1)*1.231;
+      else boardLocal.z=Math.sign(boardLocal.z||1)*1.081;
+      player.swimPosition.copy(boardLocal).applyQuaternion(wood.quaternion).add(wood.position);
+      player.velocity.x*=.35;player.velocity.z*=.35;
+    }
+  }
+  if(!diving&&!player.waterJumping&&player.swimPosition.y>newSurface+.9){
     player.swimPosition.y=newSurface+.9;
     if(player.velocity.y>0)player.velocity.y=0;
   }
-  if(!diving&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
+  if(!diving&&!player.waterJumping&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
     player.swimPosition.y=newSurface-.08;
     player.velocity.y=0;
   }
