@@ -86,7 +86,7 @@ const sun=new THREE.DirectionalLight(0xffe4bd,1.6);
 sun.position.set(-35,55,20);sun.castShadow=false;scene.add(sun);
 const WORLD_SIZE=100000;
 const WORLD_HALF=WORLD_SIZE/2;
-const oceanGeometry=new THREE.PlaneGeometry(WORLD_SIZE,WORLD_SIZE,200,200);
+const oceanGeometry=new THREE.PlaneGeometry(WORLD_SIZE,WORLD_SIZE,400,400);
 oceanGeometry.rotateX(-Math.PI/2);
 const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05,side:THREE.DoubleSide});
 const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
@@ -114,7 +114,15 @@ function waveSample(x,z,t){
   waveResult.height=height;waveResult.x=offsetX;waveResult.z=offsetZ;
   return waveResult;
 }
-function waveHeight(x,z,t){return waveSample(x,z,t).height;}
+function waveHeight(x,z,t){
+  let baseX=x,baseZ=z;
+  for(let i=0;i<4;i++){
+    const sample=waveSample(baseX,baseZ,t);
+    baseX=x-sample.x;
+    baseZ=z-sample.z;
+  }
+  return waveSample(baseX,baseZ,t).height;
+}
 function surfaceNormal(x,z,t){
 const e=50;
 const dx=(waveHeight(x+e,z,t)-waveHeight(x-e,z,t))/(2*e);
@@ -531,10 +539,8 @@ function updateDriftwood(t,dt){
   if(windVelocity.length()>maxSpeed)windVelocity.setLength(maxSpeed);
   wood.position.x+=windVelocity.x*dt;
   wood.position.z+=windVelocity.z*dt;
-  const currentX=driftX+windVelocity.x*.15,currentZ=driftZ+windVelocity.z*.15;
-  const boardWave=waveSample(currentX,currentZ,t);
-  wood.position.y=boardWave.height+.12;
-  wood.quaternion.setFromUnitVectors(up,surfaceNormal(currentX,currentZ,t));
+  wood.position.y=waveHeight(wood.position.x,wood.position.z,t)+.12;
+  wood.quaternion.setFromUnitVectors(up,surfaceNormal(wood.position.x,wood.position.z,t));
   wood.rotateY(hullHeading+Math.sin(t*.22)*.012);
 }
 function updatePlayer(dt,t){
@@ -685,7 +691,7 @@ function updatePlayer(dt,t){
     if(player.velocity.y<0)player.velocity.y=0;
   }
 
-  const underwater=player.swimPosition.y<newSurface-.05;
+  const underwater=diving&&player.swimPosition.y<newSurface-.05;
   underwaterOverlay.style.display=underwater?"block":"none";
   if(underwater){
     skyDome.visible=false;
