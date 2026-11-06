@@ -166,7 +166,7 @@ const pickupHint=document.getElementById("pickupHint");
 const craftPanel=document.getElementById("craftPanel");
 const craftInfo=document.getElementById("craftInfo");
 let nearestPickup=null;
-let raftHalfX=.95,raftHalfZ=.825;
+let raftHalfX=.95,raftHalfZ=.825;\nconst raftBounds={minX:-.95,maxX:.95,minZ:-.825,maxZ:.825};
 const raftTiles=new Set(["0,0"]);
 function updateRaftBounds(){
   let maxX=0,maxZ=0;
@@ -216,7 +216,7 @@ function craftSail(){
 }
 document.getElementById("buildPlank").addEventListener("click",buildPlank);
 document.getElementById("buildSail").addEventListener("click",craftSail);
-document.getElementById("closeCraft").addEventListener("click",()=>craftPanel.style.display="none");
+document.getElementById("closeCraft").addEventListener("click",()=>{craftPanel.style.display="none";renderer.domElement.requestPointerLock();});
 document.getElementById("sailLeft").addEventListener("click",()=>{if(sailRig){sailAngle-=.12;sailRig.rotation.y=sailAngle;}});
 document.getElementById("sailRight").addEventListener("click",()=>{if(sailRig){sailAngle+=.12;sailRig.rotation.y=sailAngle;}});
 document.getElementById("sailDown").addEventListener("click",()=>{if(sailRig){sailHeight=Math.max(-.35,sailHeight-.1);sailRig.position.y=.12+sailHeight;}});
@@ -240,7 +240,7 @@ let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
 const underwaterOverlay=document.getElementById("underwater");
 document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
-document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=pointerLocked?"none":"grid";});
+document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=(pointerLocked||craftPanel.style.display==="block")?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
 const mainMenu=document.getElementById("mainMenu"),controlsPanel=document.getElementById("controlsPanel");
@@ -248,7 +248,7 @@ document.getElementById("showControls").addEventListener("click",()=>{mainMenu.s
 document.getElementById("backToMenu").addEventListener("click",()=>{controlsPanel.style.display="none";mainMenu.style.display="block";});
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
-  if(e.code==="KeyB"&&!e.repeat&&pointerLocked){craftPanel.style.display=craftPanel.style.display==="block"?"none":"block";}
+  if(e.code==="KeyB"&&!e.repeat){const opening=craftPanel.style.display!=="block";craftPanel.style.display=opening?"block":"none";if(opening)document.exitPointerLock();else renderer.domElement.requestPointerLock();}
   if(e.code==="KeyE"&&!e.repeat&&pointerLocked&&nearestPickup&&nearestPickup.active){
     inventory[nearestPickup.type]++;refreshInventory();nearestPickup.active=false;nearestPickup.group.visible=false;
     pickupHint.style.display="none";nearestPickup=null;
@@ -391,7 +391,7 @@ function updatePlayer(dt,t){
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
   const boardLocal=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
   const boardTop=.11;
-  const insideBoardTop=Math.abs(boardLocal.x)<raftHalfX-.18&&Math.abs(boardLocal.z)<raftHalfZ-.18;
+  const insideBoardTop=boardLocal.x>raftBounds.minX+.18&&boardLocal.x<raftBounds.maxX-.18&&boardLocal.z>raftBounds.minZ+.18&&boardLocal.z<raftBounds.maxZ-.18;
   if(player.waterJumping&&player.velocity.y<=0&&previousBoardLocalY>boardTop+player.height&&boardLocal.y<=boardTop+player.height&&insideBoardTop){
     player.inWater=false;player.waterJumping=false;player.fallingIntoWater=false;player.velocity.set(0,0,0);
     player.local.set(boardLocal.x,0,boardLocal.z);player.boardGrounded=true;player.pitch=0;
