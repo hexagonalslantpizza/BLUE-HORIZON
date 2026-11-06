@@ -25,15 +25,15 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 #craftPanel button{display:block;width:100%;margin:7px 0 0;padding:8px 10px;font-size:11px}
 #craftPanel .adjustRow{display:flex;gap:6px}
 #craftPanel .adjustRow button{flex:1}
-#pickupHint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:3;background:#07141be8;padding:9px 15px;border:1px solid #bedcdc55;border-radius:4px;font-size:12px;display:none}
+#pickupHint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:3;background:#07141be8;padding:9px 15px;border:1px solid #bedcdc55;border-radius:4px;font-size:12px;display:none}#placementHint{position:fixed;left:50%;top:calc(50% + 18px);transform:translateX(-50%);z-index:3;background:#07141be8;padding:8px 12px;border:1px solid #bedcdc55;border-radius:4px;font-size:11px;display:none;pointer-events:none}#sailPanel{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:4;width:205px;background:#07141bf0;border:1px solid #bedcdc55;border-radius:7px;padding:13px;display:none}#sailPanel h2{font-size:13px;letter-spacing:.14em;margin:0 0 7px}#sailPanel p{font-size:11px;margin:5px 0;color:#c0d0ce}#sailPanel button{display:block;width:100%;margin:7px 0 0;padding:8px 10px;font-size:11px}#sailPanel .adjustRow{display:flex;gap:6px}#sailPanel .adjustRow button{flex:1}
 
 </style>
 </head>
 <body>
-<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect floating supplies</p><p><b>B</b> — Open raft workshop</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
+<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect supplies / interact with sail</p><p><b>B</b> — Open raft workshop</p><p><b>Left click</b> — Place selected piece</p><p><b>ESC</b> — Cancel placement</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
 <div id="crosshair"></div><div id="status">FIELD TEST 003</div><div id="underwater" aria-hidden="true"></div>
 <div id="survivalUI"><strong>INVENTORY</strong><div id="inventoryRows"><span>Wood: <b id="woodCount">0</b></span><span>Rope: <b id="ropeCount">0</b></span><span>Cloth: <b id="clothCount">0</b></span></div><p style="margin:8px 0 0;font-size:10px">Press B to craft and build</p></div>
-<div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Gather floating supplies to begin building.</p><button id="buildPlank">BUILD WOODEN FLOOR · 2 WOOD</button><button id="buildSail">CRAFT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><div id="sailControls" style="display:none"><p>SAIL ADJUSTMENTS</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div></div><button id="closeCraft">CLOSE · B</button></div>
+<div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Choose a piece, then aim at a valid snap point.</p><button id="buildPlank">SELECT WOODEN FLOOR · 2 WOOD</button><button id="buildSail">SELECT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><button id="closeCraft">CLOSE · B</button></div><div id="sailPanel"><h2>SAIL CONTROLS</h2><p>Adjust the sail while standing nearby.</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div><button id="closeSail">CLOSE</button></div><div id="pickupHint"></div><div id="placementHint">AIM AT A VALID SNAP POINT · CLICK TO PLACE · ESC TO CANCEL</div>
 <div id="pickupHint"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
@@ -167,6 +167,13 @@ const pickupHint=document.getElementById("pickupHint");
 const craftPanel=document.getElementById("craftPanel");
 const craftInfo=document.getElementById("craftInfo");
 let nearestPickup=null;
+const placementHint=document.getElementById("placementHint");
+const sailPanel=document.getElementById("sailPanel");
+let buildMode=null,placementPreview=null,placementValid=false,placementTile=null;
+const placementRaycaster=new THREE.Raycaster();
+const placementPointer=new THREE.Vector2(0,0);
+const placementPlane=new THREE.Plane();
+const placementHit=new THREE.Vector3();
 const TILE_WIDTH=1.9,TILE_DEPTH=1.65;
 const raftTiles=new Set(["0,0"]);
 function hasRaftTileAt(x,z){
@@ -174,43 +181,57 @@ function hasRaftTileAt(x,z){
   const tileZ=Math.floor((z+TILE_DEPTH/2)/TILE_DEPTH);
   return raftTiles.has(tileX+","+tileZ);
 }
-function buildPlank(){
-  if(player.inWater){craftInfo.textContent="Climb onto your raft before building.";return;}
-  if(inventory.wood<2){craftInfo.textContent="Not enough wood. Collect floating timber.";return;}
-  const facing=new THREE.Vector3(-Math.sin(player.yaw),0,-Math.cos(player.yaw))
-    .applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
-  let stepX=0,stepZ=0;
-  if(Math.abs(facing.x)>Math.abs(facing.z))stepX=Math.sign(facing.x)||1;
-  else stepZ=Math.sign(facing.z)||1;
-  const openEdges=[...raftTiles].map(key=>{
-    const [x,z]=key.split(",").map(Number);
-    return {x,z,distance:(x*TILE_WIDTH-player.local.x)**2+(z*TILE_DEPTH-player.local.z)**2};
-  }).filter(tile=>!raftTiles.has((tile.x+stepX)+","+(tile.z+stepZ)));
-  if(!openEdges.length){craftInfo.textContent="No open edge in that direction.";return;}
-  openEdges.sort((a,b)=>a.distance-b.distance);
-  const tx=openEdges[0].x+stepX,tz=openEdges[0].z+stepZ;
-  const key=tx+","+tz;
-  inventory.wood-=2;
-  refreshInventory();
+function tileHasNeighbor(tx,tz){
+  return raftTiles.has((tx-1)+","+tz)||raftTiles.has((tx+1)+","+tz)||raftTiles.has(tx+","+(tz-1))||raftTiles.has(tx+","+(tz+1));
+}
+function makeFloorSection(tx,tz){
   const section=new THREE.Mesh(new THREE.BoxGeometry(TILE_WIDTH,.22,TILE_DEPTH),new THREE.MeshStandardMaterial({color:0x806346,roughness:.96}));
-  section.position.set(tx*TILE_WIDTH,0,tz*TILE_DEPTH);
-  section.castShadow=true;section.receiveShadow=true;wood.add(section);
-  for(let i=0;i<5;i++){
-    const line=new THREE.Mesh(new THREE.BoxGeometry(1.58,.012,.018),grainMaterial);
-    line.position.set(tx*TILE_WIDTH,.116,tz*TILE_DEPTH-.58+i*.28);
-    wood.add(line);
-  }
-  raftTiles.add(key);
-  craftInfo.textContent="Floor section added. Your raft is now larger.";
+  section.position.set(tx*TILE_WIDTH,0,tz*TILE_DEPTH);section.castShadow=true;section.receiveShadow=true;wood.add(section);
+  for(let i=0;i<5;i++){const line=new THREE.Mesh(new THREE.BoxGeometry(1.58,.012,.018),grainMaterial);line.position.set(tx*TILE_WIDTH,.116,tz*TILE_DEPTH-.58+i*.28);wood.add(line);}
+  raftTiles.add(tx+","+tz);
+}
+function clearPlacement(){
+  buildMode=null;placementValid=false;placementTile=null;
+  if(placementPreview){wood.remove(placementPreview);placementPreview=null;}
+  placementHint.style.display="none";
+}
+function makePlacementPreview(mode){
+  const group=new THREE.Group(),material=new THREE.MeshStandardMaterial({color:0xb8e1c9,transparent:true,opacity:.48,depthWrite:false});
+  if(mode==="floor"){const mesh=new THREE.Mesh(new THREE.BoxGeometry(TILE_WIDTH,.22,TILE_DEPTH),material);mesh.position.y=.02;group.add(mesh);}
+  else{const mast=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,2.5,8),material);mast.position.y=1.25;group.add(mast);const sail=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.55),material);sail.position.set(0,1.83,.035);group.add(sail);const boom=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1.85,7),material);boom.rotation.z=Math.PI/2;boom.position.y=1.05;group.add(boom);}
+  return group;
+}
+function selectBuild(mode){
+  if(player.inWater){craftInfo.textContent="Climb onto your raft before building.";return;}
+  if(mode==="floor"&&inventory.wood<2){craftInfo.textContent="Not enough wood. Collect floating timber.";return;}
+  if(mode==="sail"&&(sailRig||inventory.wood<4||inventory.rope<2||inventory.cloth<2)){craftInfo.textContent=sailRig?"Your raft already has a sail.":"You need 4 wood, 2 rope, and 2 cloth.";return;}
+  clearPlacement();buildMode=mode;placementPreview=makePlacementPreview(mode);wood.add(placementPreview);
+  craftInfo.textContent="Aim at a valid snap point and click to place.";
+  craftPanel.style.display="none";renderer.domElement.requestPointerLock();
+}
+function updatePlacement(){
+  if(!buildMode||!placementPreview||!pointerLocked||player.inWater)return;
+  const normal=new THREE.Vector3(0,1,0).applyQuaternion(wood.quaternion).normalize();
+  placementPlane.setFromNormalAndCoplanarPoint(normal,wood.position.clone().addScaledVector(normal,.12));
+  placementRaycaster.setFromCamera(placementPointer,camera);
+  if(!placementRaycaster.ray.intersectPlane(placementPlane,placementHit)){placementPreview.visible=false;placementValid=false;return;}
+  const local=wood.worldToLocal(placementHit.clone()),tx=Math.round(local.x/TILE_WIDTH),tz=Math.round(local.z/TILE_DEPTH),key=tx+","+tz;
+  placementTile={x:tx,z:tz};
+  placementValid=buildMode==="floor"?(!raftTiles.has(key)&&tileHasNeighbor(tx,tz)):raftTiles.has(key);
+  placementPreview.position.set(tx*TILE_WIDTH,.13,tz*TILE_DEPTH);placementPreview.visible=true;
+  placementHint.textContent=placementValid?"CLICK TO PLACE · ESC TO CANCEL":"NOT A VALID SNAP POINT";placementHint.style.display="block";
+}
+function placeSelectedPiece(){
+  if(!buildMode||!placementValid||!placementTile)return;
+  const {x,z}=placementTile;
+  if(buildMode==="floor"){if(inventory.wood<2)return;inventory.wood-=2;makeFloorSection(x,z);}
+  else{if(inventory.wood<4||inventory.rope<2||inventory.cloth<2||sailRig)return;inventory.wood-=4;inventory.rope-=2;inventory.cloth-=2;craftSailAt(x,z);}
+  refreshInventory();clearPlacement();
 }
 let sailRig=null,sailAngle=0,sailHeight=0;
-function craftSail(){
-  if(player.inWater){craftInfo.textContent="Climb onto your raft before building.";return;}
-  if(sailRig){craftInfo.textContent="Your raft already has a sail.";return;}
-  if(inventory.wood<4||inventory.rope<2||inventory.cloth<2){craftInfo.textContent="You need 4 wood, 2 rope, and 2 cloth.";return;}
-  inventory.wood-=4;inventory.rope-=2;inventory.cloth-=2;refreshInventory();
+function craftSailAt(tileX,tileZ){
   sailRig=new THREE.Group();
-  sailRig.position.set(0,.12,0);
+  sailRig.position.set(tileX*TILE_WIDTH,.12,tileZ*TILE_DEPTH);
   wood.add(sailRig);
   const woodMaterial=new THREE.MeshStandardMaterial({color:0x684c32,roughness:.9});
   const mast=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,2.5,8),woodMaterial);
@@ -245,12 +266,12 @@ function craftSail(){
     sailAssembly.add(seam);
   }
   sailRig.userData.sailAssembly=sailAssembly;
-  document.getElementById("sailControls").style.display="block";
-  craftInfo.textContent="Sail built! Rotate it and raise or lower the cloth.";
+  craftInfo.textContent="Sail placed. Look directly at it and press E to adjust it.";
 }
-document.getElementById("buildPlank").addEventListener("click",buildPlank);
-document.getElementById("buildSail").addEventListener("click",craftSail);
+document.getElementById("buildPlank").addEventListener("click",()=>selectBuild("floor"));
+document.getElementById("buildSail").addEventListener("click",()=>selectBuild("sail"));
 document.getElementById("closeCraft").addEventListener("click",()=>{craftPanel.style.display="none";renderer.domElement.requestPointerLock();});
+document.getElementById("closeSail").addEventListener("click",()=>{sailPanel.style.display="none";renderer.domElement.requestPointerLock();});
 document.getElementById("sailLeft").addEventListener("click",()=>{if(sailRig){sailAngle-=.12;sailRig.rotation.y=sailAngle;}});
 document.getElementById("sailRight").addEventListener("click",()=>{if(sailRig){sailAngle+=.12;sailRig.rotation.y=sailAngle;}});
 document.getElementById("sailDown").addEventListener("click",()=>{if(sailRig){sailHeight=Math.max(-.65,sailHeight-.1);sailRig.userData.sailAssembly.position.y=sailHeight;}});
@@ -277,16 +298,19 @@ document.getElementById("start").addEventListener("click",()=>renderer.domElemen
 document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=(pointerLocked||craftPanel.style.display==="block")?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
+function isAimingAtSail(){if(!sailRig)return false;placementRaycaster.setFromCamera(placementPointer,camera);const hits=placementRaycaster.intersectObject(sailRig,true);return hits.length>0&&hits[0].distance<4.5;}
+renderer.domElement.addEventListener("click",()=>{if(pointerLocked&&buildMode)placeSelectedPiece();});
 const mainMenu=document.getElementById("mainMenu"),controlsPanel=document.getElementById("controlsPanel");
 document.getElementById("showControls").addEventListener("click",()=>{mainMenu.style.display="none";controlsPanel.style.display="block";});
 document.getElementById("backToMenu").addEventListener("click",()=>{controlsPanel.style.display="none";mainMenu.style.display="block";});
 document.addEventListener("keydown",e=>{
   if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
   if(e.code==="KeyB"&&!e.repeat){const opening=craftPanel.style.display!=="block";craftPanel.style.display=opening?"block":"none";if(opening)document.exitPointerLock();else renderer.domElement.requestPointerLock();}
-  if(e.code==="KeyE"&&!e.repeat&&pointerLocked&&nearestPickup&&nearestPickup.active){
-    inventory[nearestPickup.type]++;refreshInventory();nearestPickup.active=false;nearestPickup.group.visible=false;
-    pickupHint.style.display="none";nearestPickup=null;
+  if(e.code==="KeyE"&&!e.repeat&&pointerLocked){
+    if(isAimingAtSail()){sailPanel.style.display="block";document.exitPointerLock();}
+    else if(nearestPickup&&nearestPickup.active){inventory[nearestPickup.type]++;refreshInventory();nearestPickup.active=false;nearestPickup.group.visible=false;pickupHint.style.display="none";nearestPickup=null;}
   }
+  if(e.code==="Escape"&&buildMode)clearPlacement();
   if(e.code==="Space"&&!e.repeat){
     if(!player.inWater&&player.boardGrounded){
       player.boardJumpVelocity=4.7;
@@ -497,7 +521,7 @@ function updatePickups(t,dt){
     pickupHint.style.display="block";
   }else pickupHint.style.display="none";
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);renderer.render(scene,camera);}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);updatePlacement();renderer.render(scene,camera);}
 animate();
 window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script>
