@@ -28,8 +28,8 @@ The easiest way to run the prototype is with **Visual Studio Code** and the **Li
 | --- | --- |
 | W A S D | Move on driftwood / swim |
 | Mouse | Look around |
-| Space | Swim upward / return to the surface |
-| Left or Right Ctrl | Dive downward |
+| Space | Small jump when at the surface (tap, don't hold) |
+| Left or Right Ctrl | Dive downward (hold) |
 | E | Climb onto the driftwood when close to it |
 | ESC | Release the mouse cursor |
 
@@ -41,6 +41,9 @@ Click **ENTER OCEAN** to begin and capture the mouse.
 - A floating piece of driftwood that tilts with the waves
 - Basic first-person camera and movement
 - Swimming with momentum and water resistance
+- Neutral buoyancy underwater when no vertical input is held
+- A small one-press jump at the surface
+- Gentle driftwood movement while the player stays supported on board
 - Diving underwater and swimming back toward the surface
 - Underwater color and fog effect
 - Climbing back onto the driftwood when close to it
