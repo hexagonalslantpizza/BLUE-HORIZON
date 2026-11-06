@@ -31,7 +31,7 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </head>
 <body>
 <div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect floating supplies</p><p><b>B</b> — Open raft workshop</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="underwater" aria-hidden="true"></div>
+<div id="crosshair"></div><div id="status">FIELD TEST 003</div><div id="underwater" aria-hidden="true"></div>
 <div id="survivalUI"><strong>INVENTORY</strong><div id="inventoryRows"><span>Wood: <b id="woodCount">0</b></span><span>Rope: <b id="ropeCount">0</b></span><span>Cloth: <b id="clothCount">0</b></span></div><p style="margin:8px 0 0;font-size:10px">Press B to craft and build</p></div>
 <div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Gather floating supplies to begin building.</p><button id="buildPlank">BUILD WOODEN FLOOR · 2 WOOD</button><button id="buildSail">CRAFT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><div id="sailControls" style="display:none"><p>SAIL ADJUSTMENTS</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div></div><button id="closeCraft">CLOSE · B</button></div>
 <div id="pickupHint"></div>
@@ -166,61 +166,94 @@ const pickupHint=document.getElementById("pickupHint");
 const craftPanel=document.getElementById("craftPanel");
 const craftInfo=document.getElementById("craftInfo");
 let nearestPickup=null;
-let raftHalfX=.95,raftHalfZ=.825;\nconst raftBounds={minX:-.95,maxX:.95,minZ:-.825,maxZ:.825};
+const TILE_WIDTH=1.9,TILE_DEPTH=1.65;
 const raftTiles=new Set(["0,0"]);
-function updateRaftBounds(){
-  let maxX=0,maxZ=0;
-  for(const tile of raftTiles){const [x,z]=tile.split(",").map(Number);maxX=Math.max(maxX,Math.abs(x));maxZ=Math.max(maxZ,Math.abs(z));}
-  raftHalfX=.95+maxX*1.9;raftHalfZ=.825+maxZ*1.65;
+function hasRaftTileAt(x,z){
+  const tileX=Math.floor((x+TILE_WIDTH/2)/TILE_WIDTH);
+  const tileZ=Math.floor((z+TILE_DEPTH/2)/TILE_DEPTH);
+  return raftTiles.has(tileX+","+tileZ);
 }
 function buildPlank(){
+  if(player.inWater){craftInfo.textContent="Climb onto your raft before building.";return;}
   if(inventory.wood<2){craftInfo.textContent="Not enough wood. Collect floating timber.";return;}
-  const faceX=-Math.sin(player.yaw),faceZ=-Math.cos(player.yaw);
-  let tx=0,tz=0;
-  if(Math.abs(faceX)>Math.abs(faceZ)){
-    const sign=Math.sign(faceX)||1;
-    const xs=[...raftTiles].map(v=>Number(v.split(",")[0]));
-    tx=sign>0?Math.max(...xs)+1:Math.min(...xs)-1;
-  }else{
-    const sign=Math.sign(faceZ)||-1;
-    const zs=[...raftTiles].map(v=>Number(v.split(",")[1]));
-    tz=sign>0?Math.max(...zs)+1:Math.min(...zs)-1;
-  }
+  const facing=new THREE.Vector3(-Math.sin(player.yaw),0,-Math.cos(player.yaw))
+    .applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
+  let stepX=0,stepZ=0;
+  if(Math.abs(facing.x)>Math.abs(facing.z))stepX=Math.sign(facing.x)||1;
+  else stepZ=Math.sign(facing.z)||1;
+  const openEdges=[...raftTiles].map(key=>{
+    const [x,z]=key.split(",").map(Number);
+    return {x,z,distance:(x*TILE_WIDTH-player.local.x)**2+(z*TILE_DEPTH-player.local.z)**2};
+  }).filter(tile=>!raftTiles.has((tile.x+stepX)+","+(tile.z+stepZ)));
+  if(!openEdges.length){craftInfo.textContent="No open edge in that direction.";return;}
+  openEdges.sort((a,b)=>a.distance-b.distance);
+  const tx=openEdges[0].x+stepX,tz=openEdges[0].z+stepZ;
   const key=tx+","+tz;
-  if(raftTiles.has(key)){craftInfo.textContent="That section is already occupied.";return;}
-  inventory.wood-=2;refreshInventory();
-  const section=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x806346,roughness:.96}));
-  section.position.set(tx*1.9,0,tz*1.65);section.castShadow=true;section.receiveShadow=true;wood.add(section);
-  for(let i=0;i<4;i++){const line=new THREE.Mesh(new THREE.BoxGeometry(1.58,.012,.018),grainMaterial);line.position.set(tx*1.9,.116,tz*1.65-.48+i*.31);wood.add(line);}
-  raftTiles.add(key);updateRaftBounds();
-  craftInfo.textContent="Floor section added to your raft.";
+  inventory.wood-=2;
+  refreshInventory();
+  const section=new THREE.Mesh(new THREE.BoxGeometry(TILE_WIDTH,.22,TILE_DEPTH),new THREE.MeshStandardMaterial({color:0x806346,roughness:.96}));
+  section.position.set(tx*TILE_WIDTH,0,tz*TILE_DEPTH);
+  section.castShadow=true;section.receiveShadow=true;wood.add(section);
+  for(let i=0;i<5;i++){
+    const line=new THREE.Mesh(new THREE.BoxGeometry(1.58,.012,.018),grainMaterial);
+    line.position.set(tx*TILE_WIDTH,.116,tz*TILE_DEPTH-.58+i*.28);
+    wood.add(line);
+  }
+  raftTiles.add(key);
+  craftInfo.textContent="Floor section added. Your raft is now larger.";
 }
 let sailRig=null,sailAngle=0,sailHeight=0;
 function craftSail(){
+  if(player.inWater){craftInfo.textContent="Climb onto your raft before building.";return;}
   if(sailRig){craftInfo.textContent="Your raft already has a sail.";return;}
   if(inventory.wood<4||inventory.rope<2||inventory.cloth<2){craftInfo.textContent="You need 4 wood, 2 rope, and 2 cloth.";return;}
   inventory.wood-=4;inventory.rope-=2;inventory.cloth-=2;refreshInventory();
-  sailRig=new THREE.Group();sailRig.position.set(0,.12,0);wood.add(sailRig);
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,2.5,8),new THREE.MeshStandardMaterial({color:0x684c32,roughness:.9}));
-  mast.position.y=1.25;sailRig.add(mast);
-  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1.85,7),new THREE.MeshStandardMaterial({color:0x725438,roughness:.9}));
-  boom.rotation.z=Math.PI/2;boom.position.set(0,1.05,0);sailRig.add(boom);
+  sailRig=new THREE.Group();
+  sailRig.position.set(0,.12,0);
+  wood.add(sailRig);
+  const woodMaterial=new THREE.MeshStandardMaterial({color:0x684c32,roughness:.9});
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,2.5,8),woodMaterial);
+  mast.position.y=1.25;
+  sailRig.add(mast);
+  const riggingMaterial=new THREE.MeshStandardMaterial({color:0x9c8969,roughness:1});
+  const mastTop=new THREE.Vector3(0,2.38,0);
+  for(const anchor of [
+    new THREE.Vector3(-.78,.13,-.58),
+    new THREE.Vector3(.78,.13,-.58),
+    new THREE.Vector3(-.78,.13,.58),
+    new THREE.Vector3(.78,.13,.58)
+  ]){
+    const ropeCurve=new THREE.LineCurve3(mastTop,anchor);
+    const ropeMesh=new THREE.Mesh(new THREE.TubeGeometry(ropeCurve,8,.018,5,false),riggingMaterial);
+    sailRig.add(ropeMesh);
+  }
+  const sailAssembly=new THREE.Group();
+  sailRig.add(sailAssembly);
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1.85,7),woodMaterial);
+  boom.rotation.z=Math.PI/2;
+  boom.position.set(0,1.05,0);
+  sailAssembly.add(boom);
   const sailMaterial=new THREE.MeshStandardMaterial({color:0xc6bea0,roughness:.95,side:THREE.DoubleSide});
   const sail=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.55,8,6),sailMaterial);
-  sail.position.set(0,1.83,.035);sailRig.add(sail);
+  sail.position.set(0,1.83,.035);
+  sailAssembly.add(sail);
   const seamMaterial=new THREE.MeshStandardMaterial({color:0x958e76,roughness:1});
-  for(let i=0;i<5;i++){const seam=new THREE.Mesh(new THREE.BoxGeometry(.012,1.45,.012),seamMaterial);seam.position.set(-.65+i*.325,1.83,.055);sailRig.add(seam);}
-  sailRig.userData.mast=mast;sailRig.userData.sail=sail;
+  for(let i=0;i<5;i++){
+    const seam=new THREE.Mesh(new THREE.BoxGeometry(.012,1.45,.012),seamMaterial);
+    seam.position.set(-.65+i*.325,1.83,.055);
+    sailAssembly.add(seam);
+  }
+  sailRig.userData.sailAssembly=sailAssembly;
   document.getElementById("sailControls").style.display="block";
-  craftInfo.textContent="Sail built! Adjust its angle and height below.";
+  craftInfo.textContent="Sail built! Rotate it and raise or lower the cloth.";
 }
 document.getElementById("buildPlank").addEventListener("click",buildPlank);
 document.getElementById("buildSail").addEventListener("click",craftSail);
 document.getElementById("closeCraft").addEventListener("click",()=>{craftPanel.style.display="none";renderer.domElement.requestPointerLock();});
 document.getElementById("sailLeft").addEventListener("click",()=>{if(sailRig){sailAngle-=.12;sailRig.rotation.y=sailAngle;}});
 document.getElementById("sailRight").addEventListener("click",()=>{if(sailRig){sailAngle+=.12;sailRig.rotation.y=sailAngle;}});
-document.getElementById("sailDown").addEventListener("click",()=>{if(sailRig){sailHeight=Math.max(-.35,sailHeight-.1);sailRig.position.y=.12+sailHeight;}});
-document.getElementById("sailUp").addEventListener("click",()=>{if(sailRig){sailHeight=Math.min(.8,sailHeight+.1);sailRig.position.y=.12+sailHeight;}});
+document.getElementById("sailDown").addEventListener("click",()=>{if(sailRig){sailHeight=Math.max(-.65,sailHeight-.1);sailRig.userData.sailAssembly.position.y=sailHeight;}});
+document.getElementById("sailUp").addEventListener("click",()=>{if(sailRig){sailHeight=Math.min(.55,sailHeight+.1);sailRig.userData.sailAssembly.position.y=sailHeight;}});
 
 const player={
   local:new THREE.Vector3(),
@@ -319,8 +352,8 @@ function updatePlayer(dt,t){
         player.local.y=0;player.boardJumpVelocity=0;player.boardGrounded=true;
       }
     }
-    const edgeX=Math.abs(player.local.x)>1.03;
-    const edgeZ=Math.abs(player.local.z)>.91;
+    const onRaft=hasRaftTileAt(player.local.x,player.local.z);
+    const edgeX=!onRaft;
     const boardPosition=new THREE.Vector3(player.local.x,player.local.y,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
     if(edgeX||edgeZ){
       const boardVelocity=new THREE.Vector3(move.x*1.1,player.boardJumpVelocity,move.z*1.1);
@@ -391,7 +424,7 @@ function updatePlayer(dt,t){
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
   const boardLocal=boardRelative.copy(player.swimPosition).sub(wood.position).applyQuaternion(inverseWoodQuaternion.copy(wood.quaternion).invert());
   const boardTop=.11;
-  const insideBoardTop=boardLocal.x>raftBounds.minX+.18&&boardLocal.x<raftBounds.maxX-.18&&boardLocal.z>raftBounds.minZ+.18&&boardLocal.z<raftBounds.maxZ-.18;
+  const insideBoardTop=hasRaftTileAt(boardLocal.x,boardLocal.z);
   if(player.waterJumping&&player.velocity.y<=0&&previousBoardLocalY>boardTop+player.height&&boardLocal.y<=boardTop+player.height&&insideBoardTop){
     player.inWater=false;player.waterJumping=false;player.fallingIntoWater=false;player.velocity.set(0,0,0);
     player.local.set(boardLocal.x,0,boardLocal.z);player.boardGrounded=true;player.pitch=0;
@@ -407,7 +440,7 @@ function updatePlayer(dt,t){
   if(!player.waterJumping){
     const bodyBottom=boardLocal.y-player.height;
     const verticalOverlap=bodyBottom<boardTop&&boardLocal.y>-.11;
-    if(verticalOverlap&&Math.abs(boardLocal.x)<1.23&&Math.abs(boardLocal.z)<1.08){
+    if(verticalOverlap&&hasRaftTileAt(boardLocal.x,boardLocal.z)){
       const pushX=1.23-Math.abs(boardLocal.x),pushZ=1.08-Math.abs(boardLocal.z);
       if(pushX<pushZ)boardLocal.x=Math.sign(boardLocal.x||1)*1.231;
       else boardLocal.z=Math.sign(boardLocal.z||1)*1.081;
