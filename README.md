@@ -28,7 +28,7 @@ The easiest way to run the prototype is with **Visual Studio Code** and the **Li
 | --- | --- |
 | W A S D | Move on driftwood / swim |
 | Mouse | Look around |
-| Space | Rise while held underwater / jump at the surface (tap) |
+| Space | Jump on driftwood / rise while held underwater / jump at the surface |
 | Left or Right Ctrl | Dive downward (hold) |
 | E | Climb onto the driftwood when close to it |
 | ESC | Release the mouse cursor |
@@ -37,9 +37,10 @@ Click **ENTER OCEAN** to begin and capture the mouse.
 
 ## Current prototype
 
-- Animated ocean surface with small waves
+- Animated ocean surface using layered Gerstner-style waves with horizontal crest displacement
 - A floating piece of driftwood that tilts with the waves
 - Basic first-person camera and movement
+- Jumping on driftwood and gravity-driven falls into the water
 - Swimming with momentum and water resistance
 - Neutral buoyancy underwater when no vertical input is held
 - Held Space to swim upward while underwater
