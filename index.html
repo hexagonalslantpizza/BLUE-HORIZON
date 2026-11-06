@@ -62,7 +62,7 @@ plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
 const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1});
 for(let i=0;i<5;i++){const groove=new THREE.Mesh(new THREE.BoxGeometry(1.55,.012,.018),grainMaterial);groove.position.set(0,.116,-.58+i*.28);wood.add(groove);}
 const knot=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.012,12),new THREE.MeshStandardMaterial({color:0x3d3026,roughness:1}));
-knot.rotation.x=Math.PI/2;knot.position.set(-.42,.12,.18);wood.add(knot);
+knot.position.set(-.42,.12,.18);wood.add(knot);
 const player={
   local:new THREE.Vector3(),
   velocity:new THREE.Vector3(),
@@ -109,7 +109,7 @@ function updateDriftwood(t){
   const driftX=Math.sin(t*.11)*2.4+Math.sin(t*.047)*1.1;
   const driftZ=Math.cos(t*.09)*1.9+Math.sin(t*.061)*.8;
   wood.position.set(driftX,waveHeight(driftX,driftZ,t)+.12,driftZ);
-  wood.quaternion.setFromUnitVectors(up,surfaceNormal(0,0,t));
+  wood.quaternion.setFromUnitVectors(up,surfaceNormal(driftX,driftZ,t));
   wood.rotateY(Math.sin(t*.22)*.025);
 }
 function updatePlayer(dt,t){
@@ -123,8 +123,9 @@ function updatePlayer(dt,t){
   if(move.lengthSq()>0)move.normalize();
 
   if(!player.inWater){
-    player.local.x+=move.x*2.25*dt;
-    player.local.z+=move.z*2.25*dt;
+    const localMove=move.clone().applyQuaternion(wood.quaternion.clone().invert());
+    player.local.x+=localMove.x*2.25*dt;
+    player.local.z+=localMove.z*2.25*dt;
     const edgeX=Math.abs(player.local.x)>1.03;
     const edgeZ=Math.abs(player.local.z)>.91;
     const boardPosition=new THREE.Vector3(player.local.x,0,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
@@ -157,7 +158,7 @@ function updatePlayer(dt,t){
   if(swimInput.lengthSq()>0)swimInput.normalize();
 
   const underwaterNow=player.swimPosition.y<surface-.12;
-  const swimAcceleration=underwaterNow?3.0:2.6;
+  const swimAcceleration=underwaterNow?3.8:3.0;
   player.velocity.x+=swimInput.x*swimAcceleration*dt;
   player.velocity.z+=swimInput.z*swimAcceleration*dt;
 
@@ -174,14 +175,14 @@ function updatePlayer(dt,t){
     if(Math.abs(player.velocity.y)<.035)player.velocity.y=0;
   }
 
-  player.velocity.x*=Math.exp(-1.7*dt);
-  player.velocity.z*=Math.exp(-1.7*dt);
+  player.velocity.x*=Math.exp(-(underwaterNow?2.4:2.0)*dt);
+  player.velocity.z*=Math.exp(-(underwaterNow?2.4:2.0)*dt);
   player.velocity.y*=Math.exp(-(diving?1.4:2.2)*dt);
   player.swimPosition.addScaledVector(player.velocity,dt);
 
   const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
-  if(!diving&&player.swimPosition.y>newSurface+1.0){
-    player.swimPosition.y=newSurface+1.0;
+  if(!diving&&player.swimPosition.y>newSurface+.9){
+    player.swimPosition.y=newSurface+.9;
     if(player.velocity.y>0)player.velocity.y=0;
   }
   if(!diving&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
