@@ -14,12 +14,12 @@ p{color:#c0d0ce;line-height:1.5;font-size:14px}
 button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
 #hud{position:fixed;left:16px;bottom:14px;z-index:2;color:#dce9e5;font-size:12px;line-height:1.5;text-shadow:0 2px 4px #000;pointer-events:none}
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
-#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
+#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}\n#underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
 </style>
 </head>
 <body>
 <div id="overlay"><div id="panel"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><p>WASD to move · Mouse to look · ESC to release the mouse</p><button id="start">ENTER OCEAN</button></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 001</div><div id="hud">WASD — move<br>Mouse — look<br>Stay on the driftwood.</div>
+<div id="crosshair"></div><div id="status">FIELD TEST 002</div><div id="hud">WASD — swim / move<br>Mouse — look<br>SPACE — surface / rise<br>CTRL — dive<br>E — climb onto driftwood<br>ESC — release mouse</div><div id="underwater" aria-hidden="true"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -42,7 +42,7 @@ const sun=new THREE.DirectionalLight(0xffe4bd,1.6);
 sun.position.set(-35,55,20);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
 const oceanGeometry=new THREE.PlaneGeometry(420,420,180,180);
 oceanGeometry.rotateX(-Math.PI/2);
-const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05});
+const oceanMaterial=new THREE.MeshStandardMaterial({color:0x245967,roughness:.34,metalness:.05,side:THREE.DoubleSide});
 const ocean=new THREE.Mesh(oceanGeometry,oceanMaterial);ocean.receiveShadow=true;scene.add(ocean);
 const positions=oceanGeometry.attributes.position;
 const basePositions=positions.array.slice();
@@ -62,42 +62,133 @@ const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1})
 for(let i=0;i<5;i++){const groove=new THREE.Mesh(new THREE.BoxGeometry(1.55,.012,.018),grainMaterial);groove.position.set(0,.116,-.58+i*.28);wood.add(groove);}
 const knot=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.012,12),new THREE.MeshStandardMaterial({color:0x3d3026,roughness:1}));
 knot.rotation.x=Math.PI/2;knot.position.set(-.42,.12,.18);wood.add(knot);
-const player={local:new THREE.Vector3(),velocity:new THREE.Vector3(),height:1.68,yaw:0,pitch:0};
+const player={
+  local:new THREE.Vector3(),
+  velocity:new THREE.Vector3(),
+  swimPosition:new THREE.Vector3(),
+  height:1.68,
+  yaw:0,
+  pitch:0,
+  inWater:false,
+  diving:false
+};
 let pointerLocked=false,fallen=false;
 const overlay=document.getElementById("overlay");
+const underwaterOverlay=document.getElementById("underwater");
 document.getElementById("start").addEventListener("click",()=>renderer.domElement.requestPointerLock());
 document.addEventListener("pointerlockchange",()=>{pointerLocked=document.pointerLockElement===renderer.domElement;overlay.style.display=pointerLocked?"none":"grid";});
 document.addEventListener("mousemove",event=>{if(!pointerLocked)return;player.yaw-=event.movementX*.0022;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.002,-1.45,1.45);});
 const keys=new Set();
-document.addEventListener("keydown",e=>keys.add(e.code));
+document.addEventListener("keydown",e=>{
+  keys.add(e.code);
+  if(e.code==="Space"||e.code==="ControlLeft"||e.code==="ControlRight")e.preventDefault();
+  if(e.code==="KeyE"&&player.inWater){
+    const dx=player.swimPosition.x-wood.position.x;
+    const dz=player.swimPosition.z-wood.position.z;
+    const distance=Math.hypot(dx,dz);
+    const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
+    if(distance<1.75&&Math.abs(player.swimPosition.y-surface)<1.35){
+      player.inWater=false;fallen=false;player.local.set(0,0,0);player.velocity.set(0,0,0);player.pitch=0;
+    }
+  }
+});
 document.addEventListener("keyup",e=>keys.delete(e.code));
 window.addEventListener("blur",()=>keys.clear());
 const clock=new THREE.Clock(),up=new THREE.Vector3(0,1,0),forward=new THREE.Vector3(),right=new THREE.Vector3(),move=new THREE.Vector3();
 let elapsed=0;
 function updateOcean(t){
-for(let i=0;i<positions.count;i++){const x=basePositions[i*3],z=basePositions[i*3+2];positions.array[i*3+1]=waveHeight(x,z,t);}
-positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
+  for(let i=0;i<positions.count;i++){const x=basePositions[i*3],z=basePositions[i*3+2];positions.array[i*3+1]=waveHeight(x,z,t);}
+  positions.needsUpdate=true;oceanGeometry.computeVertexNormals();
 }
 function updateDriftwood(t){
-wood.position.set(0,waveHeight(0,0,t)+.12,0);
-wood.quaternion.setFromUnitVectors(up,surfaceNormal(0,0,t));
-wood.rotateY(Math.sin(t*.22)*.025);
+  wood.position.set(0,waveHeight(0,0,t)+.12,0);
+  wood.quaternion.setFromUnitVectors(up,surfaceNormal(0,0,t));
+  wood.rotateY(Math.sin(t*.22)*.025);
 }
 function updatePlayer(dt,t){
-forward.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw)).normalize();
-right.set(Math.cos(player.yaw),0,-Math.sin(player.yaw)).normalize();
-move.set(0,0,0);
-if(keys.has("KeyW"))move.add(forward);if(keys.has("KeyS"))move.sub(forward);
-if(keys.has("KeyD"))move.add(right);if(keys.has("KeyA"))move.sub(right);
-if(move.lengthSq()>0)move.normalize();
-if(!fallen){
-player.local.x+=move.x*2.25*dt;player.local.z+=move.z*2.25*dt;
-if(Math.abs(player.local.x)>1.03||Math.abs(player.local.z)>.91){fallen=true;player.velocity.y=-.2;}
-}else{player.velocity.y-=9.8*dt;player.local.y+=player.velocity.y*dt;}
-const worldPosition=new THREE.Vector3(player.local.x,0,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
-if(fallen){const waterY=waveHeight(worldPosition.x,worldPosition.z,t);worldPosition.y=Math.max(waterY+.15,worldPosition.y+player.local.y);player.local.y=worldPosition.y-waterY-.15;}
-else worldPosition.y+=player.height;
-camera.position.copy(worldPosition);camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+  forward.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw)).normalize();
+  right.set(Math.cos(player.yaw),0,-Math.sin(player.yaw)).normalize();
+  move.set(0,0,0);
+  if(keys.has("KeyW"))move.add(forward);
+  if(keys.has("KeyS"))move.sub(forward);
+  if(keys.has("KeyD"))move.add(right);
+  if(keys.has("KeyA"))move.sub(right);
+  if(move.lengthSq()>0)move.normalize();
+
+  if(!player.inWater){
+    player.local.x+=move.x*2.25*dt;
+    player.local.z+=move.z*2.25*dt;
+    const edgeX=Math.abs(player.local.x)>1.03;
+    const edgeZ=Math.abs(player.local.z)>.91;
+    const boardPosition=new THREE.Vector3(player.local.x,0,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
+    if(edgeX||edgeZ){
+      player.inWater=true;fallen=true;
+      player.swimPosition.set(boardPosition.x,boardPosition.y+player.height,boardPosition.z);
+      player.velocity.set(move.x*1.1,-1.25,move.z*1.1);
+    }else{
+      const cameraPosition=boardPosition.add(new THREE.Vector3(0,player.height,0));
+      camera.position.copy(cameraPosition);
+      camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
+      return;
+    }
+  }
+
+  // Swimming uses its own world-space velocity; water slows movement and gently
+  // supports the player near the surface instead of treating water as a death plane.
+  const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
+  const diving=keys.has("ControlLeft")||keys.has("ControlRight");
+  const rising=keys.has("Space");
+  const lookDirection=new THREE.Vector3(
+    -Math.sin(player.yaw)*Math.cos(player.pitch),
+    Math.sin(player.pitch),
+    -Math.cos(player.yaw)*Math.cos(player.pitch)
+  ).normalize();
+  const swimInput=new THREE.Vector3();
+  if(keys.has("KeyW"))swimInput.add(lookDirection);
+  if(keys.has("KeyS"))swimInput.sub(lookDirection);
+  if(keys.has("KeyD"))swimInput.add(right);
+  if(keys.has("KeyA"))swimInput.sub(right);
+  if(swimInput.lengthSq()>0)swimInput.normalize();
+
+  const swimAcceleration=diving||player.swimPosition.y<surface-.45?5.0:3.6;
+  player.velocity.x+=swimInput.x*swimAcceleration*dt;
+  player.velocity.z+=swimInput.z*swimAcceleration*dt;
+  if(diving)player.velocity.y-=5.2*dt;
+  else if(rising)player.velocity.y+=6.2*dt;
+  else if(player.swimPosition.y<surface-.28)player.velocity.y+=3.1*dt;
+  else player.velocity.y+=(surface+.22-player.swimPosition.y)*3.0*dt;
+
+  const drag=Math.exp(-2.0*dt);
+  player.velocity.x*=drag;
+  player.velocity.z*=drag;
+  player.velocity.y*=Math.exp(-1.25*dt);
+  player.swimPosition.addScaledVector(player.velocity,dt);
+
+  const newSurface=waveHeight(player.swimPosition.x,player.swimPosition.z,t);
+  // A buoyant surface limit keeps the player afloat unless they deliberately dive.
+  if(!diving&&!rising&&player.swimPosition.y<newSurface+.12){
+    player.swimPosition.y=newSurface+.12;
+    if(player.velocity.y<0)player.velocity.y=0;
+  }
+  if(player.swimPosition.y>newSurface+.65&&!rising&&!diving){
+    player.swimPosition.y+=(newSurface+.35-player.swimPosition.y)*Math.min(1,dt*2.5);
+  }
+
+  const underwater=player.swimPosition.y<newSurface-.05;
+  underwaterOverlay.style.display=underwater?"block":"none";
+  if(underwater){
+    scene.background.set(0x123d50);
+    scene.fog.color.set(0x123d50);
+    scene.fog.near=2;
+    scene.fog.far=42;
+  }else{
+    scene.background.set(0x78929a);
+    scene.fog.color.set(0x78929a);
+    scene.fog.near=35;
+    scene.fog.far=190;
+  }
+  camera.position.copy(player.swimPosition);
+  camera.rotation.set(player.pitch,player.yaw,0,"YXZ");
 }
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed);updatePlayer(dt,elapsed);renderer.render(scene,camera);}
 animate();
