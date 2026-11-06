@@ -451,14 +451,8 @@ document.addEventListener("keydown",e=>{
       player.boardJumpVelocity=4.7;
       player.boardGrounded=false;
     }else if(player.inWater&&!player.waterJumping){
-      const surface=waveHeight(player.swimPosition.x,player.swimPosition.z,elapsed);
-      if(player.swimPosition.y>=surface-.2&&player.swimPosition.y<=surface+.9){
-        player.velocity.y=7.2;
-        player.waterJumping=true;
-      }else{
-        // A single upward swimming kick per key press, never continuous lift.
-        player.velocity.y=Math.max(player.velocity.y,2.2);
-      }
+      player.velocity.y=7.2;
+      player.waterJumping=true;
     }
   }
   keys.add(e.code);
@@ -668,7 +662,7 @@ function updatePlayer(dt,t){
   // The plank blocks swimmers below its top; approaching players are pushed around its edges.
   if(!player.waterJumping){
     const bodyBottom=boardLocal.y-player.height;
-    const verticalOverlap=bodyBottom<boardTop&&boardLocal.y>-.11;
+    const verticalOverlap=bodyBottom<boardTop&&boardLocal.y>-.46;
     if(verticalOverlap&&hasRaftTileAt(boardLocal.x,boardLocal.z)){
       const tileX=Math.floor((boardLocal.x+TILE_WIDTH/2)/TILE_WIDTH);
       const tileZ=Math.floor((boardLocal.z+TILE_DEPTH/2)/TILE_DEPTH);
@@ -686,9 +680,9 @@ function updatePlayer(dt,t){
     player.swimPosition.y=newSurface+.9;
     if(player.velocity.y>0)player.velocity.y=0;
   }
-  if(!diving&&!player.waterJumping&&player.swimPosition.y>newSurface-.08&&player.velocity.y<0){
-    player.swimPosition.y=newSurface-.08;
-    player.velocity.y=0;
+  if(!diving&&!player.waterJumping&&player.swimPosition.y<newSurface+.18){
+    player.swimPosition.y=newSurface+.18;
+    if(player.velocity.y<0)player.velocity.y=0;
   }
 
   const underwater=player.swimPosition.y<newSurface-.05;
