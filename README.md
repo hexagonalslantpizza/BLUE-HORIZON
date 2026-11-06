@@ -45,6 +45,7 @@ Click **ENTER OCEAN** to begin and capture the mouse.
 - Held Space to swim upward while underwater
 - A small one-press jump at the surface
 - Gentle driftwood movement while the player stays supported on board
+- Board-relative walking that follows the driftwood's tilt and direction
 - Diving underwater and swimming back toward the surface
 - Underwater color and fog effect
 - Climbing back onto the driftwood when close to it
