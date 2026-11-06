@@ -139,7 +139,7 @@ function islandSurfaceAt(island,x,z){
 function createIsland(x,z,radius,peak,seed,large){
   const island={x,z,radius,peak,seed},segments=72,rings=15,vertices=[],colors=[],indices=[];
   const sand=new THREE.Color(0xb5a77d),grass=new THREE.Color(0x65764b),rock=new THREE.Color(0x66675b);
-  vertices.push(x,-.16,z);colors.push(sand.r,sand.g,sand.b);
+  vertices.push(x,-.16+peak,z);colors.push(rock.r,rock.g,rock.b);
   for(let ring=1;ring<=rings;ring++){
     const t=ring/rings;
     for(let i=0;i<segments;i++){
@@ -444,7 +444,7 @@ function updateWind(dt){
   }
   windDirection.set(Math.sin(wind.angle),0,-Math.cos(wind.angle)).normalize();
   const relativeAngle=wind.angle+player.yaw;
-  windArrow.style.transform=`rotate(${relativeAngle*180/Math.PI}deg)`;
+  windArrow.style.transform=`translate(-50%,-50%) rotate(${relativeAngle*180/Math.PI}deg)`;
   windStrength.textContent=wind.speed<4.8?"LIGHT BREEZE":wind.speed>5.8?"STRONG BREEZE":"STEADY BREEZE";
   const shipRight=new THREE.Vector3(Math.cos(player.yaw),0,-Math.sin(player.yaw));
   const shipForward=new THREE.Vector3(-Math.sin(player.yaw),0,-Math.cos(player.yaw));
