@@ -355,7 +355,7 @@ function updatePlayer(dt,t){
     const onRaft=hasRaftTileAt(player.local.x,player.local.z);
     const edgeX=!onRaft;
     const boardPosition=new THREE.Vector3(player.local.x,player.local.y,player.local.z).applyQuaternion(wood.quaternion).add(wood.position);
-    if(edgeX||edgeZ){
+    if(edgeX){
       const boardVelocity=new THREE.Vector3(move.x*1.1,player.boardJumpVelocity,move.z*1.1);
       player.inWater=true;fallen=true;player.fallingIntoWater=true;
       player.swimPosition.set(boardPosition.x,boardPosition.y+player.height,boardPosition.z);
@@ -441,9 +441,14 @@ function updatePlayer(dt,t){
     const bodyBottom=boardLocal.y-player.height;
     const verticalOverlap=bodyBottom<boardTop&&boardLocal.y>-.11;
     if(verticalOverlap&&hasRaftTileAt(boardLocal.x,boardLocal.z)){
-      const pushX=1.23-Math.abs(boardLocal.x),pushZ=1.08-Math.abs(boardLocal.z);
-      if(pushX<pushZ)boardLocal.x=Math.sign(boardLocal.x||1)*1.231;
-      else boardLocal.z=Math.sign(boardLocal.z||1)*1.081;
+      const tileX=Math.floor((boardLocal.x+TILE_WIDTH/2)/TILE_WIDTH);
+      const tileZ=Math.floor((boardLocal.z+TILE_DEPTH/2)/TILE_DEPTH);
+      const centerX=tileX*TILE_WIDTH,centerZ=tileZ*TILE_DEPTH;
+      const localX=boardLocal.x-centerX,localZ=boardLocal.z-centerZ;
+      const pushX=TILE_WIDTH/2+.28-Math.abs(localX);
+      const pushZ=TILE_DEPTH/2+.28-Math.abs(localZ);
+      if(pushX<pushZ)boardLocal.x=centerX+Math.sign(localX||1)*(TILE_WIDTH/2+.281);
+      else boardLocal.z=centerZ+Math.sign(localZ||1)*(TILE_DEPTH/2+.281);
       player.swimPosition.copy(boardLocal).applyQuaternion(wood.quaternion).add(wood.position);
       player.velocity.x*=.35;player.velocity.z*=.35;
     }
