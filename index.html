@@ -13,7 +13,7 @@ h1{margin:0 0 8px;letter-spacing:.16em;font-size:23px}
 p{color:#c0d0ce;line-height:1.5;font-size:14px}
 button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9;padding:11px 22px;border-radius:4px;font-weight:bold;cursor:pointer}
 #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#f1f3df;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}
-#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}
+#status{position:fixed;right:16px;top:14px;z-index:2;font-size:11px;letter-spacing:.12em;color:#d4e0d9;text-shadow:0 2px 4px #000;pointer-events:none}#windCompass{position:fixed;left:14px;top:14px;z-index:3;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#07141bdc;border:1px solid #bedcdc55;border-radius:7px;backdrop-filter:blur(5px);pointer-events:none}#windDial{width:38px;height:38px;border:1px solid #c5d7cf88;border-radius:50%;display:grid;place-items:center;position:relative;background:#071b20aa}#windArrow{font-size:27px;line-height:1;color:#e5d6a8;transform:rotate(0deg);text-shadow:0 1px 5px #000}#windText{font-size:10px;letter-spacing:.12em;color:#d4e0d9}#windStrength{display:block;margin-top:3px;font-size:10px;letter-spacing:.04em;color:#9fb9b2}
 #underwater{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,75,91,.22),rgba(2,28,49,.42));box-shadow:inset 0 0 100px rgba(0,25,42,.35)}
 #survivalUI{position:fixed;left:14px;bottom:14px;z-index:3;background:#07141bdc;border:1px solid #bedcdc44;border-radius:7px;padding:12px 14px;min-width:190px;font-size:12px;backdrop-filter:blur(5px)}
 #survivalUI strong{letter-spacing:.12em;font-size:11px;color:#d9e7df}
@@ -30,8 +30,8 @@ button{margin-top:10px;border:1px solid #b4c9c4;color:#071b20;background:#c3d3c9
 </style>
 </head>
 <body>
-<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect supplies / interact with sail</p><p><b>B</b> — Open raft workshop</p><p><b>Left click</b> — Place selected piece</p><p><b>ESC</b> — Cancel placement</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
-<div id="crosshair"></div><div id="status">FIELD TEST 003</div><div id="underwater" aria-hidden="true"></div>
+<div id="overlay"><div id="panel"><div id="mainMenu"><h1>BLUE HORIZON</h1><p>Ocean and driftwood prototype</p><div id="menuButtons"><button id="start">ENTER OCEAN</button><button id="showControls" type="button">CONTROLS</button></div></div><div id="controlsPanel"><h1>CONTROLS</h1><p><b>WASD</b> — Move / swim</p><p><b>Mouse</b> — Look around</p><p><b>Wind compass</b> — Arrow shows the direction wind is blowing</p><p><b>SPACE</b> — Jump from driftwood or kick upward once while swimming</p><p><b>CTRL</b> — Dive underwater</p><p><b>E</b> — Collect supplies / interact with sail</p><p><b>B</b> — Open raft workshop</p><p><b>Left click</b> — Place selected piece</p><p><b>ESC</b> — Cancel placement</p><p><b>ESC</b> — Release mouse / open menu</p><button id="backToMenu" type="button">BACK</button></div></div></div>
+<div id="crosshair"></div><div id="windCompass"><div id="windDial"><div id="windArrow">↑</div></div><div id="windText">WIND<span id="windStrength">STEADY</span></div></div><div id="status">FIELD TEST 004</div><div id="underwater" aria-hidden="true"></div>
 <div id="survivalUI"><strong>INVENTORY</strong><div id="inventoryRows"><span>Wood: <b id="woodCount">0</b></span><span>Rope: <b id="ropeCount">0</b></span><span>Cloth: <b id="clothCount">0</b></span></div><p style="margin:8px 0 0;font-size:10px">Press B to craft and build</p></div>
 <div id="craftPanel"><h2>RAFT WORKSHOP</h2><p id="craftInfo">Choose a piece, then aim at a valid snap point.</p><button id="buildPlank">SELECT WOODEN FLOOR · 2 WOOD</button><button id="buildSail">SELECT SAIL · 4 WOOD, 2 ROPE, 2 CLOTH</button><button id="closeCraft">CLOSE · B</button></div><div id="sailPanel"><h2>SAIL CONTROLS</h2><p>Adjust the sail while standing nearby.</p><div class="adjustRow"><button id="sailLeft">ANGLE −</button><button id="sailRight">ANGLE +</button></div><div class="adjustRow"><button id="sailDown">LOWER</button><button id="sailUp">RAISE</button></div><button id="closeSail">CLOSE</button></div><div id="pickupHint"></div><div id="placementHint">AIM AT A VALID SNAP POINT · CLICK TO PLACE · ESC TO CANCEL</div>
 <div id="pickupHint"></div>
@@ -121,6 +121,13 @@ const dz=(waveHeight(x,z+e,t)-waveHeight(x,z-e,t))/(2*e);
 return new THREE.Vector3(-dx,1,-dz).normalize();
 }
 const wood=new THREE.Group();scene.add(wood);
+const wind={angle:Math.random()*Math.PI*2,targetAngle:0,speed:5.2,nextShift:120+Math.random()*1680,shiftTime:0,shiftDuration:24};
+wind.targetAngle=wind.angle;
+const windDirection=new THREE.Vector3();
+const windForce=new THREE.Vector3();
+const windVelocity=new THREE.Vector3();
+let hullHeading=0;
+const windArrow=document.getElementById("windArrow"),windStrength=document.getElementById("windStrength");
 const plank=new THREE.Mesh(new THREE.BoxGeometry(1.9,.22,1.65),new THREE.MeshStandardMaterial({color:0x72583d,roughness:.96}));
 plank.castShadow=true;plank.receiveShadow=true;wood.add(plank);
 const grainMaterial=new THREE.MeshStandardMaterial({color:0x4e3b2b,roughness:1});
@@ -346,13 +353,61 @@ function updateOcean(t){
   // Wave positions update every frame; lighting normals update every third frame.
   if(++normalUpdateCounter%3===0)oceanGeometry.computeVertexNormals();
 }
-function updateDriftwood(t){
-  const driftX=Math.sin(t*.11)*2.4+Math.sin(t*.047)*1.1;
-  const driftZ=Math.cos(t*.09)*1.9+Math.sin(t*.061)*.8;
-  const boardWave=waveSample(driftX,driftZ,t);
-  wood.position.set(driftX+boardWave.x,boardWave.height+.12,driftZ+boardWave.z);
-  wood.quaternion.setFromUnitVectors(up,surfaceNormal(driftX,driftZ,t));
-  wood.rotateY(Math.sin(t*.22)*.025);
+function updateWind(dt){
+  if(wind.nextShift>0)wind.nextShift-=dt;
+  if(wind.nextShift<=0){
+    let change=(Math.random()-.5)*Math.PI*1.35;
+    if(Math.abs(change)<.45)change=Math.sign(change||1)*.45;
+    wind.targetAngle=wind.angle+change;
+    wind.shiftTime=0;
+    wind.shiftDuration=18+Math.random()*30;
+    wind.nextShift=120+Math.random()*1680;
+    wind.speed=4.1+Math.random()*2.2;
+  }
+  if(wind.shiftTime<wind.shiftDuration){
+    wind.shiftTime=Math.min(wind.shiftDuration,wind.shiftTime+dt);
+    const blend=1-Math.pow(1-wind.shiftTime/wind.shiftDuration,2);
+    let difference=Math.atan2(Math.sin(wind.targetAngle-wind.angle),Math.cos(wind.targetAngle-wind.angle));
+    wind.angle+=difference*blend*.035;
+    if(wind.shiftTime>=wind.shiftDuration)wind.angle=wind.targetAngle;
+  }
+  windDirection.set(Math.sin(wind.angle),0,-Math.cos(wind.angle)).normalize();
+  const relativeAngle=wind.angle-player.yaw;
+  windArrow.style.transform=`rotate(${relativeAngle*180/Math.PI}deg)`;
+  windStrength.textContent=wind.speed<4.8?"LIGHT BREEZE":wind.speed>5.8?"STRONG BREEZE":"STEADY BREEZE";
+}
+function updateDriftwood(t,dt){
+  const driftX=Math.sin(t*.11)*.65+Math.sin(t*.047)*.35;
+  const driftZ=Math.cos(t*.09)*.55+Math.sin(t*.061)*.3;
+  if(sailRig){
+    const sailNormal=new THREE.Vector3(0,0,1).applyAxisAngle(up,sailAngle).applyQuaternion(wood.quaternion).normalize();
+    const facingDot=windDirection.dot(sailNormal);
+    const pressure=Math.abs(facingDot);
+    const hullForward=new THREE.Vector3(0,0,-1).applyAxisAngle(up,hullHeading);
+    const windAlignment=hullForward.dot(windDirection);
+    const upwindFactor=windAlignment<-.72?.12:THREE.MathUtils.clamp(1+windAlignment*.35,.55,1.2);
+    const forceDirection=sailNormal.multiplyScalar(Math.sign(facingDot)||0);
+    const thrust=pressure*upwindFactor*wind.speed*.095;
+    windForce.copy(forceDirection).multiplyScalar(thrust);
+    windVelocity.addScaledVector(windForce,dt);
+    const desiredHeading=Math.atan2(forceDirection.x,-forceDirection.z);
+    if(thrust>.025){
+      const turn=Math.atan2(Math.sin(desiredHeading-hullHeading),Math.cos(desiredHeading-hullHeading));
+      hullHeading+=THREE.MathUtils.clamp(turn,-dt*(.22+thrust*.28),dt*(.22+thrust*.28));
+    }
+  }else{
+    windVelocity.multiplyScalar(Math.exp(-.9*dt));
+  }
+  windVelocity.multiplyScalar(Math.exp(-.16*dt));
+  const maxSpeed=3.8;
+  if(windVelocity.length()>maxSpeed)windVelocity.setLength(maxSpeed);
+  wood.position.x+=windVelocity.x*dt;
+  wood.position.z+=windVelocity.z*dt;
+  const currentX=driftX+windVelocity.x*.15,currentZ=driftZ+windVelocity.z*.15;
+  const boardWave=waveSample(currentX,currentZ,t);
+  wood.position.y=boardWave.height+.12;
+  wood.quaternion.setFromUnitVectors(up,surfaceNormal(currentX,currentZ,t));
+  wood.rotateY(hullHeading+Math.sin(t*.22)*.012);
 }
 function updatePlayer(dt,t){
   forward.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw)).normalize();
@@ -521,7 +576,7 @@ function updatePickups(t,dt){
     pickupHint.style.display="block";
   }else pickupHint.style.display="none";
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);updatePlacement();renderer.render(scene,camera);}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;updateWind(dt);updateOcean(elapsed);updateDriftwood(elapsed,dt);updatePlayer(dt,elapsed);updatePickups(elapsed,dt);updatePlacement();renderer.render(scene,camera);}
 animate();
 window.addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script>
